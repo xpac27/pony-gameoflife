@@ -1,0 +1,3 @@
+[submodule "pony-glfw3"]
+	path = pony-glfw3
+	url = git@github.com:xpac27/pony-glfw3.git
