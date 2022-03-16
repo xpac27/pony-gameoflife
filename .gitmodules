@@ -1,3 +1,6 @@
 [submodule "pony-glfw3"]
 	path = pony-glfw3
 	url = git@github.com:xpac27/pony-glfw3.git
+[submodule "pony-gl"]
+	path = pony-gl
+	url = git@github.com:xpac27/pony-gl.git
