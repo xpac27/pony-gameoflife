@@ -28,11 +28,11 @@ actor Main is WindowListener
 
       GLFW.glfwPollEvents()
 
-      GL.glViewport(0, 0, glfw_window_width, glfw_window_height)
-      GL.glClearColor(GLZero(), GLZero(), GLZero(), GLOne())
-      GL.glColorMask(GLOne(), GLOne(), GLOne(), GLOne())
-      GL.glClear(GLColorBufferBit())
-      GL.glColorMask(GLZero(), GLZero(), GLZero(), GLZero())
+      GL.viewport(0, 0, glfw_window_width, glfw_window_height)
+      GL.clear_color(GLZero(), GLZero(), GLZero(), GLOne())
+      GL.color_mask(GLOne(), GLOne(), GLOne(), GLOne())
+      GL.clear(GLColorBufferBit())
+      GL.color_mask(GLZero(), GLZero(), GLZero(), GLZero())
 
       glfw_window.swap_buffers()
 
