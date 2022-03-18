@@ -10,21 +10,23 @@ actor Main is WindowListener
   new create(env': Env) =>
     env = env'
 
-    if (GLFW.init() == 1) then env.out.print("WOOT") end
+    if (GLFW.init() == 1) then
+      glfw_window = GLFWWindow(glfw_window_width, glfw_window_height, "Pony - Game of life")
+      glfw_window.set_listener(this)
+      glfw_window.enable_key_callback()
+      glfw_window.make_context_current()
 
-    glfw_window = GLFWWindow(glfw_window_width, glfw_window_height, "Pony - Game of life")
-    glfw_window.set_listener(this)
-    glfw_window.enable_key_callback()
-    glfw_window.make_context_current()
-
-    loop()
+      loop()
+    else
+      env.out.print("Error: could not initialize GLFW")
+      glfw_window = GLFWWindow.none()
+    end
 
   be loop() =>
     if (glfw_window.should_close()) then
       GLFW.terminate()
     else
       (glfw_window_width, glfw_window_height) = glfw_window.get_size()
-      env.out.print("glfw_window_width: " + glfw_window_width.string() + ", glfw_window_height: " + glfw_window_height.string())
 
       GLFW.poll_events()
 
@@ -39,9 +41,9 @@ actor Main is WindowListener
       loop()
     end
 
-  fun key_callback(key: I64 val, scancode: I64 val, action: I64 val, mods: I64 val) =>
+  fun key_callback(key: I32 val, scancode: I32 val, action: I32 val, mods: I32 val) =>
     match key
-    | GLFW.key_escape()
-    | GLFW.key_q() => glfw_window.set_should_close(true)
+    | GLFWKeyEscape()
+    | GLFWKeyQ() => glfw_window.set_should_close(true)
     end
     env.out.print("key: " + key.string())
