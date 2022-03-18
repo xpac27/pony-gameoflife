@@ -10,7 +10,7 @@ actor Main is WindowListener
   new create(env': Env) =>
     env = env'
 
-    if (GLFW.glfwInit() == 1) then env.out.print("WOOT") end
+    if (GLFW.init() == 1) then env.out.print("WOOT") end
 
     glfw_window = GLFWWindow(glfw_window_width, glfw_window_height, "Pony - Game of life")
     glfw_window.set_listener(this)
@@ -21,12 +21,12 @@ actor Main is WindowListener
 
   be loop() =>
     if (glfw_window.should_close()) then
-      GLFW.glfwTerminate()
+      GLFW.terminate()
     else
       (glfw_window_width, glfw_window_height) = glfw_window.get_size()
       env.out.print("glfw_window_width: " + glfw_window_width.string() + ", glfw_window_height: " + glfw_window_height.string())
 
-      GLFW.glfwPollEvents()
+      GLFW.poll_events()
 
       GL.viewport(0, 0, glfw_window_width, glfw_window_height)
       GL.clear_color(GLZero(), GLZero(), GLZero(), GLOne())
