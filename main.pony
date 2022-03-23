@@ -1,48 +1,62 @@
 use "pony-glfw3/Glfw3"
 use "pony-gl/Gl"
 
-actor Main is WindowListener
+type Position is (F32, F32)
+
+actor Main is (GLFWWindowListener & GLDebugMessageListener)
   let env: Env
   let window: NullablePointer[GLFWwindow]
-  var window_width: I32 = 640
-  var window_height: I32 = 480
-  let window_user_object: WindowUserObject
+  let window_user_object: GLFWWindowUserObject
   var program: GLuint = GLNone()
-  var vertex_array_objects: Array[GLuint] = Array[GLuint]
+  var vertex_buffer_objects: Array[GLuint] = Array[GLuint].init(-1, 1)
+  var vertex_array_objects: Array[GLuint] = Array[GLuint].init(-1, 1)
+  var positions: Array[F32] = Array[F32]
 
   new create(env': Env) =>
     env = env'
+    positions.push(-0.5)
+    positions.push(-0.5)
+    positions.push( 0.0)
+    positions.push( 0.5)
+    positions.push(-0.5)
+    positions.push( 0.0)
+    positions.push( 0.0)
+    positions.push( 0.5)
+    positions.push( 0.0)
 
     if (Glfw3.glfwInit() == GLFWTrue()) then
       env.out.print("GLFW initialized version: " + Glfw3.glfwGetVersionString())
-
-      Glfw3.glfwSwapInterval(1)
 
       Glfw3.glfwWindowHint(GLFWResizable(), GLFWTrue())
       Glfw3.glfwWindowHint(GLFWDecorated(), GLFWTrue())
       Glfw3.glfwWindowHint(GLFWFocused(), GLFWTrue())
       Glfw3.glfwWindowHint(GLFWDoublebuffer(), GLFWTrue())
-
       Glfw3.glfwWindowHint(GLFWContextVersionMajor(), 3)
       Glfw3.glfwWindowHint(GLFWContextVersionMinor(), 3)
       Glfw3.glfwWindowHint(GLFWOpenglForwardCompat(), GLFWTrue())
       Glfw3.glfwWindowHint(GLFWOpenglProfile(), GLFWOpenglCoreProfile())
 
-      window = Glfw3.glfwCreateWindow(window_width, window_height, "My Title")
-      Glfw3.glfwMakeContextCurrent(window)
-
-      window_user_object = WindowUserObject(window)
+      window = Glfw3.glfwCreateWindow(640, 480, "My Title")
+      window_user_object = GLFWWindowUserObject(window)
       window_user_object.set_listener(this)
       window_user_object.enable_key_callback()
+      window_user_object.enable_framebuffer_size_callback()
+
+      Glfw3.glfwMakeContextCurrent(window)
+
+      Gl.glDebugMessageControl(GLDontCare(), GLDebugTypeOther(), GLDontCare())
+      Gl.glEnable(GLDebugOutputSynchronous())
+      Gl.glEnable(GLDebugOutput())
 
       env.out.print("GL version: " + GlHelper.glGetString(GLVersion()))
 
       let vertex_shader_source: String =
         """
         #version 330
+        layout (location = 0) in vec3 aPos;
         void main(void)
         {
-          gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+          gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0f);
         }
         """
 
@@ -52,7 +66,7 @@ actor Main is WindowListener
         out vec4 color;
         void main(void)
         {
-          color = vec4(0.0, 0.0, 1.0, 1.0);
+          color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
         }
         """
 
@@ -69,6 +83,9 @@ actor Main is WindowListener
       Gl.glAttachShader(program, fragment_shader)
       Gl.glLinkProgram(program)
 
+      Gl.glDeleteShader(vertex_shader)
+      Gl.glDeleteShader(fragment_shader)
+
       if (GlHelper.glGetShaderiv(vertex_shader, GLCompileStatus()) == GLFalse()) then
         env.out.print("ERROR: " + GlHelper.glGetShaderInfoLog(vertex_shader))
       end
@@ -82,34 +99,47 @@ actor Main is WindowListener
       end
 
       Gl.glGenVertexArrays(1, vertex_array_objects.cpointer())
+      Gl.glGenBuffers(1, vertex_buffer_objects.cpointer())
+
       Gl.glBindVertexArray(try vertex_array_objects(0)? else GLNone() end)
+      Gl.glBindBuffer(GLArrayBuffer(), try vertex_buffer_objects(0)? else GLNone() end)
+
+      Gl.glBufferData[F32](GLArrayBuffer(), GLsizeiptr.from[USize]((32 / 8) * positions.size()), positions.cpointer(), GLStaticDraw())
+
+      Gl.glVertexAttribPointer(0, 3, GLFloatType(), GLFalse(), 3 * 4)
+      Gl.glEnableVertexAttribArray(0)
+
+      Gl.glBindVertexArray(GLNone())
 
       loop()
     else
       env.out.print("Error: could not initialize GLFW")
       env.out.print(Glfw3Helper.get_error_description())
       window = NullablePointer[GLFWwindow].none()
-      window_user_object = WindowUserObject.none()
+      window_user_object = GLFWWindowUserObject.none()
     end
 
   be loop() =>
+    Glfw3.glfwMakeContextCurrent(window)
+    Glfw3.glfwSwapInterval(1)
+
     if (Glfw3.glfwWindowShouldClose(window) == 0) then
-      Glfw3.glfwPollEvents()
-
-      (window_width, window_height) = Glfw3Helper.get_window_size(window)
-
-      Gl.glViewport(0, 0, window_width, window_height)
-      Gl.glClearColor(1.0, 1.0, 0.0, 1.0)
-      Gl.glColorMask(GLTrue(), GLTrue(), GLTrue(), GLTrue())
+      Gl.glClearColor(0.0, 0.0, 0.0, 1.0)
       Gl.glClear(GLColorBufferBit())
-      Gl.glColorMask(GLFalse(), GLFalse(), GLFalse(), GLFalse())
+
       Gl.glUseProgram(program)
-      Gl.glDrawArrays(GLPoints(), 0, 1)
+      Gl.glBindVertexArray(try vertex_array_objects(0)? else GLNone() end)
+      Gl.glDrawArrays(GLTriangles(), 0, 6)
 
       Glfw3.glfwSwapBuffers(window)
+      Glfw3.glfwPollEvents()
 
       loop()
     else
+      Gl.glDeleteProgram(program)
+      Gl.glDeleteBuffers(1, vertex_buffer_objects.cpointer())
+      Gl.glDeleteVertexArrays(1, vertex_array_objects.cpointer())
+
       Glfw3.glfwDestroyWindow(window)
       Glfw3.glfwTerminate()
     end
@@ -120,4 +150,10 @@ actor Main is WindowListener
     | GLFWKeyQ() => Glfw3.glfwSetWindowShouldClose(window, GLFWTrue())
     end
     env.out.print("key: " + key.string())
+
+  fun framebuffer_size_callback(width: I32 val, height: I32 val) =>
+      Gl.glViewport(0, 0, width, height)
+
+  fun debug_message_callback(source: GLenum, type': GLenum, id: GLuint , severity: GLenum, length: GLsizei, message: Pointer[GLchar]) =>
+    env.out.print("OpenGL ERROR: ...")
 
