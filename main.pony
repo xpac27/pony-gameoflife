@@ -10,19 +10,13 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
   var program: GLuint = GLNone()
   var vertex_buffer_objects: Array[GLuint] = Array[GLuint].init(-1, 1)
   var vertex_array_objects: Array[GLuint] = Array[GLuint].init(-1, 1)
-  var positions: Array[F32] = Array[F32]
+  var positions: Array[Position] = Array[Position]
 
   new create(env': Env) =>
     env = env'
-    positions.push(-0.5)
-    positions.push(-0.5)
-    positions.push( 0.0)
-    positions.push( 0.5)
-    positions.push(-0.5)
-    positions.push( 0.0)
-    positions.push( 0.0)
-    positions.push( 0.5)
-    positions.push( 0.0)
+    positions.push((-0.5, -0.5))
+    positions.push(( 0.5, -0.5))
+    positions.push(( 0.0,  0.5))
 
     if (Glfw3.glfwInit() == GLFWTrue()) then
       env.out.print("GLFW initialized version: " + Glfw3.glfwGetVersionString())
@@ -56,7 +50,7 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
         layout (location = 0) in vec3 aPos;
         void main(void)
         {
-          gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0f);
+          gl_Position = vec4(aPos.x, aPos.y, 0.0f, 1.0f);
         }
         """
 
@@ -104,9 +98,9 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
       Gl.glBindVertexArray(try vertex_array_objects(0)? else GLNone() end)
       Gl.glBindBuffer(GLArrayBuffer(), try vertex_buffer_objects(0)? else GLNone() end)
 
-      Gl.glBufferData[F32](GLArrayBuffer(), GLsizeiptr.from[USize]((32 / 8) * positions.size()), positions.cpointer(), GLStaticDraw())
+      Gl.glBufferData[(F32, F32)](GLArrayBuffer(), GLsizeiptr.from[USize]((32 / 8) * 2 * positions.size()), positions.cpointer(), GLStaticDraw())
 
-      Gl.glVertexAttribPointer(0, 3, GLFloatType(), GLFalse(), 3 * 4)
+      Gl.glVertexAttribPointer(0, 2, GLFloatType(), GLFalse(), 2 * 4)
       Gl.glEnableVertexAttribArray(0)
 
       Gl.glBindVertexArray(GLNone())
