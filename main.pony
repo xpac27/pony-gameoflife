@@ -68,11 +68,11 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
   var updating_cells: I32 = 0
   var iteration: I32 = 0
   var refreshed: Bool = true // should be called dirty and be the opposit
+  var mouse_pressed: Bool = false
 
   let debug: Bool = false
   let grid_width: I32 = 100
   let grid_height: I32 = 100
-  let indices: Array[I32] = [2050; 2051; 2052 ; 2150 ; 2250 ; 2251 ; 2252 ; 2352]
 
   new create(env': Env) =>
     env = env'
@@ -93,10 +93,11 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
       window_user_object = GLFWWindowUserObject(window)
       window_user_object.set_listener(this)
       window_user_object.enable_key_callback()
+      window_user_object.enable_mouse_button_callback()
       window_user_object.enable_framebuffer_size_callback()
+      window_user_object.enable_cursor_pos_callback()
 
       Glfw3.glfwMakeContextCurrent(window)
-      Glfw3.glfwSwapInterval(1)
 
       Gl.glDebugMessageControl(GLDontCare(), GLDebugTypeOther(), GLDontCare())
       Gl.glEnable(GLDebugOutputSynchronous())
@@ -134,9 +135,10 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
         i = i + 1
       end
 
-      for index in indices.values() do
-        lives(index)
-      end
+      /* let indices: Array[I32] = [2050; 2051; 2052 ; 2150 ; 2250 ; 2251 ; 2252 ; 2352] */
+      /* for index in indices.values() do */
+      /*   lives(index) */
+      /* end */
 
       draw()
     else
@@ -148,6 +150,7 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
   be draw() =>
     if debug then env.out.print("draw") end
     Glfw3.glfwMakeContextCurrent(window)
+    Glfw3.glfwSwapInterval(1)
 
     Gl.glClearColor(0.0, 0.0, 0.0, 1.0)
     Gl.glClear(GLColorBufferBit())
@@ -308,6 +311,24 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
     end
     Glfw3.glfwMakeContextCurrent(window)
     Gl.glViewport(0, 0, width, height)
+
+  fun ref mouse_button_callback(button: I32, action: I32, mods: I32) =>
+    if (button == GLFWMouseButton1()) then
+      if (action == GLFWPress()) then
+        mouse_pressed = true
+      elseif (action == GLFWRelease()) then
+        mouse_pressed = false
+      end
+    end
+
+  fun ref cursor_pos_callback(xpos': F64, ypos': F64) =>
+    let xpos = I32.from[F64](xpos')
+    let ypos = I32.from[F64](ypos')
+    if (mouse_pressed) then
+      if ((xpos >= 0) and (xpos < grid_width) and (ypos >= 0) and (ypos < grid_height)) then
+        lives(xpos + (ypos * grid_width))
+      end
+    end
 
   fun debug_message_callback(source: GLenum, type': GLenum, id: GLuint , severity: GLenum, length: GLsizei, message: Pointer[GLchar]) =>
     env.out.print("OpenGL Error...")
