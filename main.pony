@@ -3,59 +3,11 @@ use "pony-gl/Gl"
 use "files"
 use "random"
 
-actor Cell
-  var alive: Bool = false
-  var alive_neighbour: U8 = 0
-
-  let index: I32
-  let main: Main tag
-  let env: Env
-  let debug: Bool
-
-  new create(main': Main, env': Env, index': I32, debug': Bool) =>
-    main = main'
-    env = env'
-    index = index'
-    debug = debug'
-
-  /* let cells: Array[Cell tag] val */
-  /* let index: USize */
-  /* new create(cells: Array[Cell tag] val, index: USize) => */
-  /*   cells = cells */
-  /*   index = index */
-
-  be live() =>
-    if debug then env.out.print(index.string() + " is alive") end
-    alive = true
-    main.hello_neighbourgs(index)
-
-  be die() =>
-    if debug then env.out.print(index.string() + " is dead") end
-    alive = false
-    main.goodbye_neighbourgs(index)
-
-  be neighbour_lives() =>
-    if debug then env.out.print(index.string() + " gained neighbour") end
-    alive_neighbour = alive_neighbour + 1
-    main.cell_updated(index)
-
-  be neighbour_dies() =>
-    if debug then env.out.print(index.string() + " lost neighbour") end
-    alive_neighbour = alive_neighbour - 1
-    main.cell_updated(index)
-
-  be compute() =>
-    if (alive == true) and ((alive_neighbour < 2) or (alive_neighbour > 3)) then
-      if debug then env.out.print(index.string() + " should die") end
-      main.dies(index)
-    elseif (alive == false) and (alive_neighbour == 3) then
-      if debug then env.out.print(index.string() + " should live") end
-      main.lives(index)
-    end
-
 actor Main is (GLFWWindowListener & GLDebugMessageListener)
+  let debug: Bool = false
   let env: Env
   let rand: Rand = Rand
+  let grid: Grid
   let window: NullablePointer[GLFWwindow]
   let window_user_object: GLFWWindowUserObject
   let vertex_buffer_objects: Array[GLuint] = Array[GLuint].init(-1, 1)
@@ -64,18 +16,11 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
   var program: GLuint = GLNone()
   var positions: Array[(F32 val, F32 val)] = Array[(F32 val, F32 val)]
   var projection_matrix: Array[F32] = Array[F32].init(0, 4 * 4)
-  var cells: Array[Cell] = Array[Cell]
-  var updating_cells: I32 = 0
-  var iteration: I32 = 0
-  var refreshed: Bool = true // should be called dirty and be the opposit
   var mouse_pressed: Bool = false
-
-  let debug: Bool = false
-  let grid_width: I32 = 100
-  let grid_height: I32 = 100
 
   new create(env': Env) =>
     env = env'
+    grid = Grid(debug, env, this)
 
     if (Glfw3.glfwInit() == GLFWTrue()) then
       env.out.print("GLFW initialized version: " + Glfw3.glfwGetVersionString())
@@ -89,7 +34,7 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
       Glfw3.glfwWindowHint(GLFWOpenglForwardCompat(), GLFWTrue())
       Glfw3.glfwWindowHint(GLFWOpenglProfile(), GLFWOpenglCoreProfile())
 
-      window = Glfw3.glfwCreateWindow(grid_width, grid_height, "Game of Life")
+      window = Glfw3.glfwCreateWindow(320, 240, "Game of Life")
       window_user_object = GLFWWindowUserObject(window)
       window_user_object.set_listener(this)
       window_user_object.enable_key_callback()
@@ -128,18 +73,6 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
 
       Gl.glBindVertexArray(GLNone())
 
-      var i: I32 = 0
-      let t: I32 = grid_width * grid_height
-      while i < t do
-        cells.push(Cell(this, env, i, debug))
-        i = i + 1
-      end
-
-      /* let indices: Array[I32] = [2050; 2051; 2052 ; 2150 ; 2250 ; 2251 ; 2252 ; 2352] */
-      /* for index in indices.values() do */
-      /*   lives(index) */
-      /* end */
-
       draw()
     else
       env.out.print(Glfw3Helper.get_error_description())
@@ -165,16 +98,22 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
 
     if (Glfw3.glfwWindowShouldClose(window) == GLFWTrue()) then return end
 
+    grid.update()
     draw()
 
-    if (updating_cells == 0) then
-      if ((refreshed = true) == false) then
-        if debug then env.out.print("refresh") end
-        if debug then env.out.print("iteration " + (iteration = iteration + 1).string()) end
-        for cell in cells.values() do
-          cell.compute()
-        end
+  be add_position(x: F32, y: F32) =>
+    positions.push((x, y))
+
+  be remove_position(x: F32, y: F32) =>
+    try
+      let result: USize = positions.find((x, y))?
+      try
+        positions.delete(result)?
+      else
+        env.out.print("Error, could not remove position " + x.string() + "x" + y.string())
       end
+    else
+      env.out.print("Error, could not find position " + x.string() + "x" + y.string())
     end
 
   fun _final() =>
@@ -184,65 +123,6 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
 
     Glfw3.glfwDestroyWindow(window)
     Glfw3.glfwTerminate()
-
-  be lives(index: I32) =>
-    if debug then env.out.print(index.string() + " borns at " + F32.from[I32](index % grid_width).string() + "." + F32.from[I32](index / grid_width).string()) end
-    positions.push((F32.from[I32](index % grid_width), F32.from[I32](index / grid_width)))
-    try
-      cells(USize.from[I32](index))?.live()
-    else
-      env.out.print("Error, could not find cell at index " + index.string())
-    end
-
-  be dies(index: I32) =>
-    if debug then env.out.print(index.string() + " dies at " + F32.from[I32](index % grid_width).string() + "." + F32.from[I32](index / grid_width).string()) end
-    try
-      let result: USize = positions.find((F32.from[I32](index % grid_width), F32.from[I32](index / grid_width)))?
-      try
-        positions.delete(result)?
-      else
-        env.out.print("Error, could not remove position from index " + index.string())
-      end
-    else
-      env.out.print("Error, could not find position from index " + index.string())
-    end
-    try cells(USize.from[I32](index))?.die() end
-
-  be hello_neighbourgs(index: I32) =>
-    if debug then env.out.print(index.string() + " welcome its neighbours") end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - 1))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + 1))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - grid_width))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + grid_width))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - (grid_width - 1)))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - (grid_width + 1)))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + (grid_width - 1)))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + (grid_width + 1)))?.neighbour_lives() end
-    refreshed = false
-
-  be goodbye_neighbourgs(index: I32) =>
-    if debug then env.out.print(index.string() + " goodbye its neighbours") end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - 1))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + 1))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - grid_width))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + grid_width))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - (grid_width - 1)))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - (grid_width + 1)))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + (grid_width - 1)))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + (grid_width + 1)))?.neighbour_dies() end
-    refreshed = false
-
-  be cell_updated(index: I32) =>
-    if debug then env.out.print("cell updated") end
-    updating_cells = updating_cells - 1
-    /* if (updating_cells == 0) then */
-    /*   env.out.print("refresh") */
-    /*   if ((refreshed = true) == false) then */
-    /*     for cell in cells.values() do */
-    /*       cell.compute() */
-    /*     end */
-    /*   end */
-    /* end */
 
   fun load_shader(shader: GLuint val, path: String) =>
     Glfw3.glfwMakeContextCurrent(window)
@@ -269,20 +149,6 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
   fun delete_shader(shader: GLuint) =>
     Glfw3.glfwMakeContextCurrent(window)
     Gl.glDeleteShader(shader)
-
-  /* fun ref spawn_cells(total: I32) => */
-  /*   var i: I32 = 0 */
-  /*   while (i = i + 1) < total do */
-  /*     /1* env.out.print(USize.from[F64](rand.real() * F64.from[USize](cells.size())).string()) *1/ */
-  /*     /1* env.out.print(rand.usize().string()) *1/ */
-  /*     let index = USize.from[F64](rand.real() * F64.from[USize](cells.size())) */
-  /*     try */
-  /*       env.out.print(index.string() + " is born") */
-  /*       cells(index)?.live() */
-  /*     else */
-  /*       env.out.print("Error, cell index out of bound: " + index.string()) */
-  /*     end */
-  /*   end */
 
   fun ref key_callback(key: I32 val, scancode: I32 val, action: I32 val, mods: I32 val) =>
     match key
@@ -325,9 +191,7 @@ actor Main is (GLFWWindowListener & GLDebugMessageListener)
     let xpos = I32.from[F64](xpos')
     let ypos = I32.from[F64](ypos')
     if (mouse_pressed) then
-      if ((xpos >= 0) and (xpos < grid_width) and (ypos >= 0) and (ypos < grid_height)) then
-        lives(xpos + (ypos * grid_width))
-      end
+      grid.spawn_at(xpos, ypos)
     end
 
   fun debug_message_callback(source: GLenum, type': GLenum, id: GLuint , severity: GLenum, length: GLsizei, message: Pointer[GLchar]) =>
