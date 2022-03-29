@@ -1,43 +1,30 @@
-actor Cell
-  var alive: Bool = false
-  var alive_neighbour: U8 = 0
+primitive DeadCell
+primitive LivingCell
+primitive UnchangedCell
+type CellShouldBe is (DeadCell | LivingCell | UnchangedCell)
 
-  let index: I32
-  let grid: Grid
-  let env: Env
-  let debug: Bool
+struct Cell
+  var _alive: Bool = false
+  var _alive_neighbour: U8 = 0
 
-  new create(grid': Grid, env': Env, index': I32, debug': Bool) =>
-    grid = grid'
-    env = env'
-    index = index'
-    debug = debug'
+  fun ref add_neighbour() =>
+    _alive_neighbour = _alive_neighbour + 1
 
-  be live() =>
-    if debug then env.out.print(index.string() + " is alive") end
-    alive = true
-    grid.hello_neighbourgs(index)
+  fun ref remove_neighbour() =>
+    _alive_neighbour = _alive_neighbour - 1
 
-  be die() =>
-    if debug then env.out.print(index.string() + " is dead") end
-    alive = false
-    grid.goodbye_neighbourgs(index)
+  fun ref live() =>
+    _alive = true
 
-  be neighbour_lives() =>
-    if debug then env.out.print(index.string() + " gained neighbour") end
-    alive_neighbour = alive_neighbour + 1
-    grid.cell_updated(index)
+  fun ref die() =>
+    _alive = false
 
-  be neighbour_dies() =>
-    if debug then env.out.print(index.string() + " lost neighbour") end
-    alive_neighbour = alive_neighbour - 1
-    grid.cell_updated(index)
-
-  be compute() =>
-    if (alive == true) and ((alive_neighbour < 2) or (alive_neighbour > 3)) then
-      if debug then env.out.print(index.string() + " should die") end
-      grid.dies(index)
-    elseif (alive == false) and (alive_neighbour == 3) then
-      if debug then env.out.print(index.string() + " should live") end
-      grid.lives(index)
+  fun should_be(): CellShouldBe =>
+    if (_alive == true) and ((_alive_neighbour < 2) or (_alive_neighbour > 3)) then
+      DeadCell
+    elseif (_alive == false) and (_alive_neighbour == 3) then
+      LivingCell
+    else
+      UnchangedCell
     end
+

@@ -1,90 +1,77 @@
+use "pony-glfw3/Glfw3"
+
 actor Grid
   let env: Env
-  let main: Main
-  let debug: Bool
-  let width: I32 = 100
-  let height: I32 = 100
+  let renderer: Renderer
+  let cluster_width: USize = 500
+  let cluster_height: USize = 500
+  let window: NullablePointer[GLFWwindow] tag // TODO should not be required
 
-  var cells: Array[Cell] = Array[Cell]
-  var updating_cells: I32 = 0
-  var iteration: I32 = 0
-  var refreshed: Bool = true // should be called dirty and be the opposit
+  var clusters: Array[Cluster] = Array[Cluster]
+  var width: USize = 0
+  var height: USize = 0
+  var positions: Array[(F32, F32)] = Array[(F32, F32)]
 
-  new create(debug': Bool, env': Env, main': Main) =>
-    debug = debug'
+  new create(env': Env, window': NullablePointer[GLFWwindow] tag) =>
     env = env'
-    main = main'
+    window = window'
+    renderer = Renderer(env, window)
 
-    var i: I32 = 0
-    let t: I32 = width * height
-    while i < t do
-      cells.push(Cell(this, env, i, debug))
-      i = i + 1
-    end
+  be resize(width': I32, height': I32) =>
+    width = USize.from[I32](width')
+    height = USize.from[I32](height')
+    renderer.resize(width', height')
 
-  be spawn_at(x: I32, y: I32) =>
-    if ((x >= 0) and (x < width) and (y >= 0) and (y < height)) then
-      lives(x + (y * width))
+    let rows = height / cluster_height
+    let columns = width / cluster_width
+    let total_culsters = columns * rows
+    clusters.>clear().reserve(total_culsters)
+    while clusters.size() < total_culsters do
+      let cluster_x = (clusters.size() % columns) * cluster_width
+      let cluster_y = (clusters.size() / columns) * cluster_height
+      clusters.push(Cluster(env, this, cluster_x, cluster_y, cluster_width, cluster_height))
     end
 
   be update() =>
-    if (updating_cells == 0) then
-      if ((refreshed = true) == false) then
-        if debug then env.out.print("refresh") end
-        if debug then env.out.print("iteration " + (iteration = iteration + 1).string()) end
-        for cell in cells.values() do
-          cell.compute()
-        end
+    for cluster in clusters.values() do
+      cluster.update()
+    end
+    if (Glfw3.glfwWindowShouldClose(window) == GLFWFalse()) then
+      update()
+    end
+    renderer.draw(positions)
+
+  be spawn_at_position(position: (USize, USize)) =>
+    spawn_at_index(get_index(position))
+
+  be spawn_at_index(index: USize) =>
+    if (index < (clusters.size() * (cluster_width * cluster_height))) then
+      let cluster_index: USize = index / (cluster_width * cluster_height)
+      let cluster_cell_local_index: USize = index % (cluster_width * cluster_height)
+      try
+        clusters(cluster_index)?.spawn_cell_at_index(cluster_cell_local_index)
+      else
+        env.out.print("Error GR01, could not find cluster at index " + cluster_index.string() + " from index " + index.string())
       end
-    end
-
-  be lives(index: I32) =>
-    if debug then env.out.print(index.string() + " borns at " + F32.from[I32](index % width).string() + "." + F32.from[I32](index / width).string()) end
-    main.add_position(F32.from[I32](index % width), F32.from[I32](index / width))
-    try
-      cells(USize.from[I32](index))?.live()
     else
-      env.out.print("Error, could not find cell at index " + index.string())
+      env.out.print("Error GR02, out of bounds (" + (clusters.size() * (cluster_width * cluster_height)).string() + ") index " + index.string())
     end
 
-  be dies(index: I32) =>
-    if debug then env.out.print(index.string() + " dies at " + F32.from[I32](index % width).string() + "." + F32.from[I32](index / width).string()) end
-    main.remove_position(F32.from[I32](index % width), F32.from[I32](index / width))
-    try cells(USize.from[I32](index))?.die() end
+  fun ref add_position(position: (USize, USize)) =>
+    positions.push((F32.from[USize](position._1), F32.from[USize](position._2)))
 
-  be hello_neighbourgs(index: I32) =>
-    if debug then env.out.print(index.string() + " welcome its neighbours") end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - 1))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + 1))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - width))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + width))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - (width - 1)))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - (width + 1)))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + (width - 1)))?.neighbour_lives() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + (width + 1)))?.neighbour_lives() end
-    refreshed = false
+  fun ref remove_position(position: (USize, USize)) =>
+    try
+      let result: USize = positions.find((F32.from[USize](position._1), F32.from[USize](position._2)))?
+      try
+        positions.delete(result)?
+      else
+        env.out.print("Error RD03, could not remove position " + position._1.string() + "x" + position._2.string())
+      end
+    else
+      env.out.print("Error RD04, could not find position " + position._1.string() + "x" + position._2.string())
+    end
 
-  be goodbye_neighbourgs(index: I32) =>
-    if debug then env.out.print(index.string() + " goodbye its neighbours") end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - 1))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + 1))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - width))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + width))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - (width - 1)))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index - (width + 1)))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + (width - 1)))?.neighbour_dies() end
-    try updating_cells = updating_cells + 1 ; cells(USize.from[I32](index + (width + 1)))?.neighbour_dies() end
-    refreshed = false
-
-  be cell_updated(index: I32) =>
-    if debug then env.out.print("cell updated") end
-    updating_cells = updating_cells - 1
-    /* if (updating_cells == 0) then */
-    /*   env.out.print("refresh") */
-    /*   if ((refreshed = true) == false) then */
-    /*     for cell in cells.values() do */
-    /*       cell.compute() */
-    /*     end */
-    /*   end */
-    /* end */
+  fun get_index(position: (USize, USize)): USize =>
+    position._1 + (position._2 * width)
 
