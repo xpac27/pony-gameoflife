@@ -1,13 +1,6 @@
 use "pony-glfw3/Glfw3"
 use "pony-gl/Gl"
 
-//            GRID                                            RENDERER
-//            - spawn_at_10
-//          | - add one neighbour to neighbouring cells
-//  CLUSTER | - check if neighbouring cells should change
-//          | - send positions to renderer .................. - update positions array
-//            - draw ........................................ - swap buffer and render
-
 actor Main is GLFWWindowListener
   let env: Env
   let grid: Grid
@@ -55,7 +48,7 @@ actor Main is GLFWWindowListener
     window_user_object.enable_framebuffer_size_callback()
     window_user_object.enable_cursor_pos_callback()
 
-    let positions: Array[(USize, USize)] = [
+    let positions: Array[(F32, F32)] = [
       (10, 10)
       (10, 11)
       (10, 12)
@@ -89,8 +82,8 @@ actor Main is GLFWWindowListener
     end
 
   fun ref cursor_pos_callback(xpos': F64, ypos': F64) =>
-    let xpos = USize.from[F64](xpos')
-    let ypos = USize.from[F64](ypos')
+    let xpos = F32.from[F64](xpos')
+    let ypos = F32.from[F64](ypos')
     if (mouse_pressed) then
       grid.spawn_at_position((xpos, ypos))
       grid.spawn_at_position((xpos, ypos))

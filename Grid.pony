@@ -10,7 +10,6 @@ actor Grid
   var clusters: Array[Cluster] = Array[Cluster]
   var width: USize = 0
   var height: USize = 0
-  var positions: Array[(F32, F32)] = Array[(F32, F32)]
 
   new create(env': Env, window': NullablePointer[GLFWwindow] tag) =>
     env = env'
@@ -21,6 +20,7 @@ actor Grid
     width = USize.from[I32](width')
     height = USize.from[I32](height')
     renderer.resize(width', height')
+    renderer.clear()
 
     let rows = height / cluster_height
     let columns = width / cluster_width
@@ -39,10 +39,13 @@ actor Grid
     if (Glfw3.glfwWindowShouldClose(window) == GLFWFalse()) then
       update()
     end
-    renderer.draw(positions)
+    renderer.swap()
+    renderer.poll()
 
-  be spawn_at_position(position: (USize, USize)) =>
-    spawn_at_index(get_index(position))
+  be spawn_at_position(position: (F32, F32)) =>
+    if ((position._1 > 0) and (position._2 > 0) and (position._1 < F32.from[USize](width)) and (position._2 < F32.from[USize](height))) then
+      spawn_at_index(get_index(position))
+    end
 
   be spawn_at_index(index: USize) =>
     if (index < (clusters.size() * (cluster_width * cluster_height))) then
@@ -53,25 +56,11 @@ actor Grid
       else
         env.out.print("Error GR01, could not find cluster at index " + cluster_index.string() + " from index " + index.string())
       end
-    else
-      env.out.print("Error GR02, out of bounds (" + (clusters.size() * (cluster_width * cluster_height)).string() + ") index " + index.string())
     end
 
-  fun ref add_position(position: (USize, USize)) =>
-    positions.push((F32.from[USize](position._1), F32.from[USize](position._2)))
+  fun report_positions(new_positions: Array[(F32, F32)] iso, old_positions: Array[(F32, F32)] iso) =>
+    renderer.draw(consume new_positions, consume old_positions)
 
-  fun ref remove_position(position: (USize, USize)) =>
-    try
-      let result: USize = positions.find((F32.from[USize](position._1), F32.from[USize](position._2)))?
-      try
-        positions.delete(result)?
-      else
-        env.out.print("Error RD03, could not remove position " + position._1.string() + "x" + position._2.string())
-      end
-    else
-      env.out.print("Error RD04, could not find position " + position._1.string() + "x" + position._2.string())
-    end
-
-  fun get_index(position: (USize, USize)): USize =>
-    position._1 + (position._2 * width)
+  fun get_index(position: (F32, F32)): USize =>
+    USize.from[F32](position._1 + (position._2 * F32.from[USize](width)))
 
