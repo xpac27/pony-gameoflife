@@ -7,9 +7,9 @@ actor Main is GLFWWindowListener
 
   let window: NullablePointer[GLFWwindow]
   let window_user_object: GLFWWindowUserObject
-  let window_width: I32 = 500
-  let window_height: I32 = 500
 
+  var window_width: I32 = 500
+  var window_height: I32 = 500
   var mouse_pressed: Bool = false
 
   new create(env': Env) =>
@@ -23,6 +23,7 @@ actor Main is GLFWWindowListener
       Glfw3.glfwWindowHint(GLFWMaximized(), GLFWTrue())
       Glfw3.glfwWindowHint(GLFWDecorated(), GLFWFalse())
       Glfw3.glfwWindowHint(GLFWFocused(), GLFWTrue())
+      Glfw3.glfwWindowHint(GLFWStencilBits(), 8)
       Glfw3.glfwWindowHint(GLFWDoublebuffer(), GLFWTrue())
       Glfw3.glfwWindowHint(GLFWContextVersionMajor(), 3)
       Glfw3.glfwWindowHint(GLFWContextVersionMinor(), 3)
@@ -70,6 +71,8 @@ actor Main is GLFWWindowListener
     end
 
   fun ref framebuffer_size_callback(width: I32, height: I32) =>
+    window_width = width
+    window_height = height
     grid.resize(window_width, window_height)
 
   fun ref mouse_button_callback(button: I32, action: I32, mods: I32) =>
