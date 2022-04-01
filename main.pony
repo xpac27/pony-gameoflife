@@ -1,5 +1,9 @@
+use "lib:opengl32" if windows
 use "pony-glfw3/Glfw3"
 use "pony-gl/Gl"
+use "lib:GLEW" if linux
+
+use @glewInit[GLenum]()
 
 actor Main is GLFWWindowListener
   let env: Env
@@ -32,15 +36,22 @@ actor Main is GLFWWindowListener
 
       window = Glfw3.glfwCreateWindow(window_width, window_height, "Game of Life")
 
+      Glfw3.glfwMakeContextCurrent(window)
+
+      // TODO put in its own package
+      if (@glewInit() != 0) then
+        env.out.print("Error, could not init glew")
+      end
+
       // TODO set in the middle of the monitor
       Glfw3.glfwSetWindowPos(window, 400, 400)
     else
+      // TODO better handle errors, the next steps wont work if we reach this scope
       env.out.print(Glfw3Helper.get_error_description())
       window = NullablePointer[GLFWwindow].none()
     end
 
-    grid = Grid(env, window)
-    grid.resize(window_width, window_height)
+    grid = Grid(env, window, window_width, window_height)
 
     window_user_object = GLFWWindowUserObject(window)
     window_user_object.set_listener(this)

@@ -17,14 +17,14 @@ class Renderer is GLDebugMessageListener
   let color_black: Array[F32] = [0 ; 0 ; 0]
   let color_red: Array[F32] = [1 ; 0 ; 0]
 
-  var width: GLsizei = 0
-  var height: GLsizei = 0
+  var width: GLsizei
+  var height: GLsizei
 
-  var projection_matrix: Array[F32] = Array[F32].init(0, 4 * 4)
-
-  new create(env': Env, window': NullablePointer[GLFWwindow] tag) =>
+  new create(env': Env, window': NullablePointer[GLFWwindow] tag, width': GLsizei, height': GLsizei) =>
     env = env'
     window = window'
+    width = width'
+    height = height'
 
     Glfw3.glfwMakeContextCurrent(window)
 
@@ -50,9 +50,12 @@ class Renderer is GLDebugMessageListener
     Gl.glEnableVertexAttribArray(0)
     Gl.glBindVertexArray(GLNone())
 
+    apply_size()
+
   fun _final() =>
     /* Glfw3.glfwMakeContextCurrent(window) */ // this crashes because the window object is already removed but is it necessary?
     Gl.glDeleteFramebuffers(total_frame_buffer_objects, frame_buffer_objects.cpointer())
+    Gl.glDeleteRenderbuffers(total_render_buffer_objects, render_buffer_objects.cpointer())
     Gl.glDeleteBuffers(1, vertex_buffer_objects.cpointer())
     Gl.glDeleteVertexArrays(1, vertex_array_objects.cpointer())
 
@@ -72,6 +75,7 @@ class Renderer is GLDebugMessageListener
 
   fun draw(new_positions: Array[(F32, F32)] iso, old_positions: Array[(F32, F32)] iso) =>
     Glfw3.glfwMakeContextCurrent(window)
+
     Gl.glUseProgram(program.handle)
     Gl.glBindVertexArray(try vertex_array_objects(0)? else GLNone() end)
 
@@ -85,25 +89,46 @@ class Renderer is GLDebugMessageListener
     Gl.glBufferData[(F32, F32)](GLArrayBuffer(), GLsizeiptr.from[USize]((32 / 8) * 2 * old_positions.size()), old_positions.cpointer(), GLDynamicDraw())
     Gl.glDrawArrays(GLPoints(), 0, GLsizei.from[USize](old_positions.size() * 2))
 
-    Gl.glBindFramebuffer(GLReadFramebuffer(), try render_buffer_objects(0)? else GLNone() end)
+    Gl.glUseProgram(GLNone())
+    Gl.glBindVertexArray(GLNone())
+
+    Gl.glBindFramebuffer(GLReadFramebuffer(), try frame_buffer_objects(0)? else GLNone() end)
     Gl.glBindFramebuffer(GLDrawFramebuffer(), 0)
     Gl.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GLColorBufferBit(), GLNearest())
+    Gl.glBindFramebuffer(GLReadFramebuffer(), GLNone())
     Gl.glBindFramebuffer(GLDrawFramebuffer(), GLNone())
 
   fun ref resize(width': GLsizei, height': GLsizei) =>
     width = width'
     height = height'
-    projection_matrix = build_projection_matrix(0, F32.from[I32](width), F32.from[I32](height), 0, -1, 10)
+    apply_size()
+
+  fun apply_size() =>
     Glfw3.glfwMakeContextCurrent(window)
+    reset_viewport()
+    reset_projection_matrix()
+    reset_frame_buffers()
+
+  fun reset_viewport() =>
     Gl.glViewport(0, 0, width, height)
+
+  fun reset_projection_matrix() =>
+    let projection_matrix = build_projection_matrix(0, F32.from[I32](width), F32.from[I32](height), 0, -1, 10)
     Gl.glUseProgram(program.handle)
     Gl.glUniformMatrix4fv(Gl.glGetUniformLocation(program.handle, "projection".cpointer()), 1, GLFalse(), projection_matrix.cpointer())
+    Gl.glUseProgram(GLNone())
+
+  fun reset_frame_buffers() =>
+    Gl.glDeleteRenderbuffers(total_render_buffer_objects, render_buffer_objects.cpointer())
     Gl.glDeleteFramebuffers(total_frame_buffer_objects, frame_buffer_objects.cpointer())
+
+    Gl.glCreateRenderbuffers(total_render_buffer_objects, render_buffer_objects.cpointer())
+    Gl.glGenFramebuffers(total_frame_buffer_objects, frame_buffer_objects.cpointer())
+
     Gl.glNamedRenderbufferStorage(try render_buffer_objects(0)? else GLNone() end, GLRgb(), width, height)
-    Gl.glBindFramebuffer(GLDrawFramebuffer(), try render_buffer_objects(0)? else GLNone() end)
+    Gl.glBindFramebuffer(GLDrawFramebuffer(), try frame_buffer_objects(0)? else GLNone() end)
     Gl.glNamedFramebufferRenderbuffer(try frame_buffer_objects(0)? else GLNone() end, GLColorAttachment0(), GLRenderbuffer(), try render_buffer_objects(0)? else GLNone() end)
     Gl.glBindFramebuffer(GLDrawFramebuffer(), GLNone())
-    env.out.print("resize " + width.string() + "x" + height.string())
 
   fun build_projection_matrix(l: F32, r: F32, b: F32, t: F32, n: F32, f: F32): Array[F32] =>
     var output = Array[F32].init(0, 4 * 4)
