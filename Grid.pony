@@ -1,72 +1,190 @@
-use "pony-glfw3/Glfw3"
+use "collections"
+use "itertools"
+use "promises"
+
+// TODO split into files
+// TODO use one more type for width/height
+type Index is USize
+
+primitive GridOperations
+  fun tag validate_position(position: Position, width: USize, height: USize): Bool =>
+    let x = USize.from[PositionType](position._1)
+    let y = USize.from[PositionType](position._2)
+    (x >= 0) and (y >= 0) and (x < width) and (y < height)
+
+  fun tag position_to_index(position: Position, width: USize): Index =>
+    let x = USize.from[PositionType](position._1)
+    let y = USize.from[PositionType](position._2)
+    x + (y * width)
+
+  fun tag index_to_cell(index: Index, lookup: Array[Cell tag] val): (Cell tag | None) =>
+    try lookup(index)? else None end
+
+  fun tag index_to_neighbours(index: Index, lookup: Array[Array[Cell tag] val] val): Iterator[Cell tag] =>
+    try lookup(index)?.values() else Array[Cell tag].values() end
+
+  fun tag increment_cell_neighbour(cell: Cell tag): Cell tag =>
+    cell.>increment_alive_neighbour_count()
+
+  fun tag decrement_cell_neighbour(cell: Cell tag): Cell tag =>
+    cell.>decrement_alive_neighbour_count()
+
+  fun tag create_cell_update_promise(cell: Cell tag): UpdateStateResultPromise =>
+    let promise = UpdateStateResultPromise
+    cell.update_state(promise)
+    promise
+
+  fun tag create_cell_spawn_promise(cell: Cell tag): UpdateStateResultPromise =>
+    let promise = UpdateStateResultPromise
+    cell.spawn(promise)
+    promise
+
+  fun tag filter_update_state(result: UpdateStateResult, expected: State): Bool =>
+    result._1 is expected
+
+  fun tag update_state_result_to_index(result: UpdateStateResult): Index =>
+    result._2
+
+  fun tag update_state_result_to_position(result: UpdateStateResult): Position =>
+    result._3
+
+class GridUpdateToken
+    new iso create(auth: AmbientAuth) => None
+
+class GridUpdater
+  let grid: Grid
+
+  var data: Array[Cell tag] iso
+
+  new create(grid': Grid, data': Array[Cell tag] iso) =>
+    grid = grid'
+    data = consume data'
+
+  fun ref apply() =>
+    grid._update_recurively(data = recover data.create() end)
 
 actor Grid
   let env: Env
   let renderer: Renderer
-  let cluster_width: USize = 500
-  let cluster_height: USize = 500
-  let window: NullablePointer[GLFWwindow] tag // TODO should not be required
 
-  var clusters: Array[Cluster] = Array[Cluster]
   var width: USize
   var height: USize
+  var cells: Array[Cell tag] val = recover cells.create() end
+  var cells_neighbours: Array[Array[Cell tag] val] val = recover cells_neighbours.create() end
+  var spawn_requests: Array[Index] iso = recover spawn_requests.create() end
 
-  new create(env': Env, window': NullablePointer[GLFWwindow] tag, width': I32, height': I32) =>
+  new create(env': Env, renderer': Renderer, width': USize, height': USize) =>
     env = env'
-    window = window'
-    width = USize.from[I32](width')
-    height = USize.from[I32](height')
-    renderer = Renderer(env, window, width', height')
-    renderer.clear()
-    reset_clusters()
+    renderer = renderer'
+    width = width'
+    height = height'
+    apply_size()
 
-  be resize(width': I32, height': I32) =>
-    width = USize.from[I32](width')
-    height = USize.from[I32](height')
-    renderer.resize(width', height')
-    renderer.clear()
-    reset_clusters()
+  be resize(width': USize, height': USize) =>
+    width = width'
+    height = height'
+    apply_size()
 
-  be update() =>
-    for cluster in clusters.values() do
-      cluster.update()
+  fun ref apply_size() =>
+    reset_cells()
+    reset_neighbours()
+
+  be update(token: GridUpdateToken iso) =>
+    _update_recurively()
+
+  be _update_recurively(input_cells: Array[Cell tag] iso = recover Array[Cell tag] end) =>
+    let spawn_promises = Iter[Index]((spawn_requests = recover spawn_requests.create() end).values())
+      .filter_map[Cell tag](GridOperations~index_to_cell(where lookup = cells))
+      .map[UpdateStateResultPromise](GridOperations~create_cell_spawn_promise())
+
+    let cell_update_promises = Iter[Cell tag]((consume input_cells).values())
+      .map[UpdateStateResultPromise](GridOperations~create_cell_update_promise())
+
+    let all_promises = Iter[UpdateStateResultPromise].chain([spawn_promises; cell_update_promises].values())
+
+    Promises[(UpdateStateResult)]
+      .join(all_promises)
+      .next[None](recover this~_receive_cell_update_state_results() end)
+
+  be _receive_cell_update_state_results(results: Array[(UpdateStateResult)] val) =>
+    let dirty_cells = recover iso
+      let alive_cells_neighbours = Iter[UpdateStateResult](results.values())
+        .filter(GridOperations~filter_update_state(where expected = Alive))
+        .map[Index](GridOperations~update_state_result_to_index())
+        .flat_map[Cell tag](GridOperations~index_to_neighbours(where lookup = cells_neighbours))
+        .map[Cell tag](GridOperations~increment_cell_neighbour())
+
+      let dead_cells_neighbours = Iter[UpdateStateResult](results.values())
+        .filter(GridOperations~filter_update_state(where expected = Dead))
+        .map[Index](GridOperations~update_state_result_to_index())
+        .flat_map[Cell tag](GridOperations~index_to_neighbours(where lookup = cells_neighbours))
+        .map[Cell tag](GridOperations~decrement_cell_neighbour())
+
+      Iter[Cell tag].chain([alive_cells_neighbours; dead_cells_neighbours].values())
+        .unique[HashIs[Cell]]()
+        .collect(Array[Cell tag])
     end
-    if (Glfw3.glfwWindowShouldClose(window) == GLFWFalse()) then
-      update()
-    end
-    renderer.swap()
-    renderer.poll()
 
-  be spawn_at_position(position: (F32, F32)) =>
-    if ((position._1 > 0) and (position._2 > 0) and (position._1 < F32.from[USize](width)) and (position._2 < F32.from[USize](height))) then
-      spawn_at_index(get_index(position))
+    let new_positions = recover val
+      Iter[UpdateStateResult](results.values())
+        .filter(GridOperations~filter_update_state(where expected = Alive))
+        .map[Position](GridOperations~update_state_result_to_position())
+        .collect(Array[Position])
     end
 
-  be spawn_at_index(index: USize) =>
-    if (index < (clusters.size() * (cluster_width * cluster_height))) then
-      let cluster_index: USize = index / (cluster_width * cluster_height)
-      let cluster_cell_local_index: USize = index % (cluster_width * cluster_height)
-      try
-        clusters(cluster_index)?.spawn_cell_at_index(cluster_cell_local_index)
-      else
-        env.out.print("Error GR01, could not find cluster at index " + cluster_index.string() + " from index " + index.string())
+    let old_positions = recover val
+      Iter[UpdateStateResult](results.values())
+        .filter(GridOperations~filter_update_state(where expected = Dead))
+        .map[Position](GridOperations~update_state_result_to_position())
+        .collect(Array[Position])
+    end
+
+    renderer.draw(new_positions, old_positions, recover GridUpdater(this, consume dirty_cells) end)
+
+  be spawn_at_positions(positions: Array[Position] val) =>
+    spawn_requests = recover iso
+      Iter[Position](positions.values())
+        .filter(GridOperations~validate_position(where width = width, height = height))
+        .map[Index](GridOperations~position_to_index(where width = width))
+        .collect(Array[Index](positions.size()))
+    end
+
+  fun get_position(index: USize): Position =>
+    (PositionType.from[USize](index % width), PositionType.from[USize](index / width))
+
+  fun get_index(position: Position): USize =>
+    USize.from[F32](position._1) + (USize.from[F32](position._2) * width)
+
+  fun ref reset_cells() =>
+    // TODO use iterators?
+    cells = recover
+      let total = width * height
+      var out: Array[Cell tag] iso = recover cells.create(total) end
+      for index in Range(0, total) do
+        out.push(Cell(env, index, get_position(index)))
       end
+      consume out
     end
 
-  fun ref reset_clusters() =>
-    let rows = height / cluster_height
-    let columns = width / cluster_width
-    let total_culsters = columns * rows
-    clusters.>clear().reserve(total_culsters)
-    while clusters.size() < total_culsters do
-      let cluster_x = (clusters.size() % columns) * cluster_width
-      let cluster_y = (clusters.size() / columns) * cluster_height
-      clusters.push(Cluster(env, this, cluster_x, cluster_y, cluster_width, cluster_height))
+  fun ref reset_neighbours() =>
+    // TODO use iterators?
+    cells_neighbours = recover
+      var out: Array[Array[Cell tag] val] iso = recover cells_neighbours.create(cells.size()) end
+      for index in Range(0, cells.size()) do
+        var neighbours: Array[Cell tag] iso = recover Array[Cell tag](8) end
+        (let x, let y) = get_position(index)
+        let w = PositionType.from[USize](width)
+        let h = PositionType.from[USize](height)
+        if (x > 0) then try neighbours.push(cells(get_index((x - 1, y)))?) end end
+        if (y > 0) then try neighbours.push(cells(get_index((x, y - 1)))?) end end
+        if (x < (w - 1)) then try neighbours.push(cells(get_index((x + 1, y)))?) end end
+        if (y < (h - 1)) then try neighbours.push(cells(get_index((x, y + 1)))?) end end
+        if ((x > 0) and (y < (h - 1))) then try neighbours.push(cells(get_index((x - 1, y + 1)))?) end end
+        if ((x < (w - 1)) and (y > 0)) then try neighbours.push(cells(get_index((x + 1, y - 1)))?) end end
+        if ((x > 0) and (y > 0)) then try neighbours.push(cells(get_index((x - 1, y - 1)))?) end end
+        if ((x < (w - 1)) and (y < (h - 1))) then try neighbours.push(cells(get_index((x + 1, y + 1)))?) end end
+        out.push(consume neighbours)
+      end
+      consume out
     end
-
-  fun report_positions(new_positions: Array[(F32, F32)] iso, old_positions: Array[(F32, F32)] iso) =>
-    renderer.draw(consume new_positions, consume old_positions)
-
-  fun get_index(position: (F32, F32)): USize =>
-    USize.from[F32](position._1 + (position._2 * F32.from[USize](width)))
 

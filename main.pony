@@ -3,20 +3,25 @@ use "pony-glfw3/Glfw3"
 use "pony-gl/Gl"
 use "lib:GLEW" if linux
 
+// TODO put in its own package
 use @glewInit[GLenum]()
 
 actor Main is GLFWWindowListener
   let env: Env
-  let grid: Grid
+  let game: Game
 
   let window: NullablePointer[GLFWwindow]
   let window_user_object: GLFWWindowUserObject
 
-  var window_width: I32 = 500
-  var window_height: I32 = 500
+
+  // TODO this goes in game
   var mouse_pressed: Bool = false
 
   new create(env': Env) =>
+    // TODO this goes in the Window class
+    let window_width: USize = 50
+    let window_height: USize = 50
+
     env = env'
 
     if (Glfw3.glfwInit() == GLFWTrue()) then
@@ -34,11 +39,10 @@ actor Main is GLFWWindowListener
       Glfw3.glfwWindowHint(GLFWOpenglForwardCompat(), GLFWTrue())
       Glfw3.glfwWindowHint(GLFWOpenglProfile(), GLFWOpenglCoreProfile())
 
-      window = Glfw3.glfwCreateWindow(window_width, window_height, "Game of Life")
+      window = Glfw3.glfwCreateWindow(I32.from[USize](window_width), I32.from[USize](window_height), "Game of Life")
 
       Glfw3.glfwMakeContextCurrent(window)
 
-      // TODO put in its own package
       if (@glewInit() != 0) then
         env.out.print("Error, could not init glew")
       end
@@ -51,7 +55,8 @@ actor Main is GLFWWindowListener
       window = NullablePointer[GLFWwindow].none()
     end
 
-    grid = Grid(env, window, window_width, window_height)
+    // TODO no need to pass window width/height if we have a nice window object that exposes it
+    game = Game(env, window_width, window_height, window, GridUpdateToken(env.root))
 
     window_user_object = GLFWWindowUserObject(window)
     window_user_object.set_listener(this)
@@ -59,17 +64,6 @@ actor Main is GLFWWindowListener
     window_user_object.enable_mouse_button_callback()
     window_user_object.enable_framebuffer_size_callback()
     window_user_object.enable_cursor_pos_callback()
-
-    let positions: Array[(F32, F32)] = [
-      (10, 10)
-      (10, 11)
-      (10, 12)
-    ]
-    for position in positions.values() do
-      grid.spawn_at_position(position)
-    end
-
-    grid.update()
 
   fun _final() =>
     Glfw3.glfwDestroyWindow(window)
@@ -80,13 +74,13 @@ actor Main is GLFWWindowListener
     | GLFWKeyEscape()
     | GLFWKeyQ() => Glfw3.glfwSetWindowShouldClose(window, GLFWTrue())
     end
+    // TODO send info to game
 
   fun ref framebuffer_size_callback(width: I32, height: I32) =>
-    window_width = width
-    window_height = height
-    grid.resize(window_width, window_height)
+    game.resize(USize.from[I32](width), USize.from[I32](height))
 
   fun ref mouse_button_callback(button: I32, action: I32, mods: I32) =>
+    // TODO send info to game and pocess it there
     if (button == GLFWMouseButton1()) then
       if (action == GLFWPress()) then
         mouse_pressed = true
@@ -96,18 +90,20 @@ actor Main is GLFWWindowListener
     end
 
   fun ref cursor_pos_callback(xpos': F64, ypos': F64) =>
+    // TODO send info to game and pocess it there
     let xpos = F32.from[F64](xpos')
     let ypos = F32.from[F64](ypos')
-    if (mouse_pressed) then
-      grid.spawn_at_position((xpos, ypos))
-      grid.spawn_at_position((xpos, ypos))
-      grid.spawn_at_position((xpos + 1 , ypos))
-      grid.spawn_at_position((xpos, ypos + 1))
-      grid.spawn_at_position((xpos - 1 , ypos))
-      grid.spawn_at_position((xpos, ypos - 1))
-      grid.spawn_at_position((xpos + 2 , ypos))
-      grid.spawn_at_position((xpos, ypos + 2))
-      grid.spawn_at_position((xpos - 2 , ypos))
-      grid.spawn_at_position((xpos, ypos - 2))
-    end
+    // TODO use the new method signature
+    /* if (mouse_pressed) then */
+    /*   grid.spawn_at_position((xpos, ypos)) */
+    /*   grid.spawn_at_position((xpos, ypos)) */
+    /*   grid.spawn_at_position((xpos + 1 , ypos)) */
+    /*   grid.spawn_at_position((xpos, ypos + 1)) */
+    /*   grid.spawn_at_position((xpos - 1 , ypos)) */
+    /*   grid.spawn_at_position((xpos, ypos - 1)) */
+    /*   grid.spawn_at_position((xpos + 2 , ypos)) */
+    /*   grid.spawn_at_position((xpos, ypos + 2)) */
+    /*   grid.spawn_at_position((xpos - 2 , ypos)) */
+    /*   grid.spawn_at_position((xpos, ypos - 2)) */
+    /* end */
 

@@ -1,7 +1,7 @@
 use "pony-glfw3/Glfw3"
 use "pony-gl/Gl"
 
-class Renderer is GLDebugMessageListener
+actor Renderer is GLDebugMessageListener
   let env: Env
   let window: NullablePointer[GLFWwindow] tag
   let program: Program
@@ -20,11 +20,11 @@ class Renderer is GLDebugMessageListener
   var width: GLsizei
   var height: GLsizei
 
-  new create(env': Env, window': NullablePointer[GLFWwindow] tag, width': GLsizei, height': GLsizei) =>
+  new create(env': Env, window': NullablePointer[GLFWwindow] tag, width': USize, height': USize) =>
     env = env'
     window = window'
-    width = width'
-    height = height'
+    width = GLsizei.from[USize](width')
+    height = GLsizei.from[USize](height')
 
     Glfw3.glfwMakeContextCurrent(window)
 
@@ -59,22 +59,15 @@ class Renderer is GLDebugMessageListener
     Gl.glDeleteBuffers(1, vertex_buffer_objects.cpointer())
     Gl.glDeleteVertexArrays(1, vertex_array_objects.cpointer())
 
-  fun clear() =>
-    Glfw3.glfwMakeContextCurrent(window)
-    Gl.glClearColor(0.0, 0.0, 0.0, 1.0)
-    Gl.glClear(GLColorBufferBit())
+  be draw(new_positions: Array[(F32, F32)] val, old_positions: Array[(F32, F32)] val, callback: {ref()} iso) =>
+    // TODO receive an Array of (position, alive/dead) so that we can draw everying in one draw call (black if dead white if alive)
+    // this way we don't need 2 arrays and can easily grab the result of our map/reduce methods
 
-  fun swap() =>
     Glfw3.glfwMakeContextCurrent(window)
     Glfw3.glfwSwapInterval(1)
     Glfw3.glfwSwapBuffers(window)
 
-  fun poll() =>
-    Glfw3.glfwMakeContextCurrent(window)
     Glfw3.glfwPollEvents()
-
-  fun draw(new_positions: Array[(F32, F32)] iso, old_positions: Array[(F32, F32)] iso) =>
-    Glfw3.glfwMakeContextCurrent(window)
 
     Gl.glUseProgram(program.handle)
     Gl.glBindVertexArray(try vertex_array_objects(0)? else GLNone() end)
@@ -98,19 +91,29 @@ class Renderer is GLDebugMessageListener
     Gl.glBindFramebuffer(GLReadFramebuffer(), GLNone())
     Gl.glBindFramebuffer(GLDrawFramebuffer(), GLNone())
 
-  fun ref resize(width': GLsizei, height': GLsizei) =>
-    width = width'
-    height = height'
+    if (Glfw3.glfwWindowShouldClose(window) == GLFWFalse()) then
+      callback()
+    end
+
+  be resize(width': USize, height': USize) =>
+    env.out.print("resize")
+    width = GLsizei.from[USize](width')
+    height = GLsizei.from[USize](height')
     apply_size()
 
   fun apply_size() =>
     Glfw3.glfwMakeContextCurrent(window)
     reset_viewport()
+    clear()
     reset_projection_matrix()
     reset_frame_buffers()
 
   fun reset_viewport() =>
     Gl.glViewport(0, 0, width, height)
+
+  fun clear() =>
+    Gl.glClearColor(0.0, 0.0, 0.0, 1.0)
+    Gl.glClear(GLColorBufferBit())
 
   fun reset_projection_matrix() =>
     let projection_matrix = build_projection_matrix(0, F32.from[I32](width), F32.from[I32](height), 0, -1, 10)

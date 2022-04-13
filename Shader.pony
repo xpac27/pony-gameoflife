@@ -15,9 +15,11 @@ class Shader
     | GeometryShader => Gl.glCreateShader(GLGeometryShader())
     | FragmentShader => Gl.glCreateShader(GLFragmentShader())
     end
-    try
-      let file = File.open(FilePath(env.root as AmbientAuth, path)?)
-      GlHelper.glShaderSource(handle, file.read_string(file.size()))
+    let file_path = FilePath(FileAuth(env.root), path)
+    let file = File.open(file_path)
+    if file.errno() is FileOK then
+      let data = file.read_string(file.size())
+      GlHelper.glShaderSource(handle, consume data)
       Gl.glCompileShader(handle)
       if (GlHelper.glGetShaderiv(handle, GLCompileStatus()) == GLFalse()) then
         env.out.print(GlHelper.glGetShaderInfoLog(handle))
