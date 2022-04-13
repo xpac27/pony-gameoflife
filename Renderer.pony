@@ -39,6 +39,7 @@ actor Renderer is GLDebugMessageListener
       Shader(env, FragmentShader, "shaders/default.frag")
     ])
 
+    // TODO create wrapper classes
     Gl.glGenVertexArrays(total_vertex_array_objects, vertex_array_objects.cpointer())
     Gl.glGenBuffers(total_vertex_buffer_objects, vertex_buffer_objects.cpointer())
     Gl.glCreateRenderbuffers(total_render_buffer_objects, render_buffer_objects.cpointer())
@@ -53,7 +54,7 @@ actor Renderer is GLDebugMessageListener
     apply_size()
 
   fun _final() =>
-    /* Glfw3.glfwMakeContextCurrent(window) */ // this crashes because the window object is already removed but is it necessary?
+    /* Glfw3.glfwMakeContextCurrent(window) */ // TODO this crashes because the window object is already removed but is it necessary?
     Gl.glDeleteFramebuffers(total_frame_buffer_objects, frame_buffer_objects.cpointer())
     Gl.glDeleteRenderbuffers(total_render_buffer_objects, render_buffer_objects.cpointer())
     Gl.glDeleteBuffers(1, vertex_buffer_objects.cpointer())
@@ -116,12 +117,14 @@ actor Renderer is GLDebugMessageListener
     Gl.glClear(GLColorBufferBit())
 
   fun reset_projection_matrix() =>
+    // TODO create wrapper classes
     let projection_matrix = build_projection_matrix(0, F32.from[I32](width), F32.from[I32](height), 0, -1, 10)
     Gl.glUseProgram(program.handle)
     Gl.glUniformMatrix4fv(Gl.glGetUniformLocation(program.handle, "projection".cpointer()), 1, GLFalse(), projection_matrix.cpointer())
     Gl.glUseProgram(GLNone())
 
   fun reset_frame_buffers() =>
+    // TODO create wrapper classes
     Gl.glDeleteRenderbuffers(total_render_buffer_objects, render_buffer_objects.cpointer())
     Gl.glDeleteFramebuffers(total_frame_buffer_objects, frame_buffer_objects.cpointer())
 
@@ -150,4 +153,4 @@ actor Renderer is GLDebugMessageListener
 
   fun debug_message_callback(source: GLenum, type': GLenum, id: GLuint , severity: GLenum, length: GLsizei, message: Pointer[GLchar]) =>
     env.out.print("Error RD04, ...")
-    // TODO implement...
+    // TODO implement... https://github.com/fendevel/Guide-to-Modern-OpenGL-Functions#detailed-messages-with-debug-output
