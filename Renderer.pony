@@ -60,7 +60,8 @@ actor Renderer is GLDebugMessageListener
     Gl.glDeleteBuffers(1, vertex_buffer_objects.cpointer())
     Gl.glDeleteVertexArrays(1, vertex_array_objects.cpointer())
 
-  be draw(new_positions: Array[(F32, F32)] val, old_positions: Array[(F32, F32)] val, callback: {ref()} iso) =>
+  // TODO here we could use the accessor pattern to not have to create new position arrays all the time (Renderer would access Grid's positions members and do its stuff with it)
+  be draw(new_positions: Array[(F32, F32)] val, old_positions: Array[(F32, F32)] val, callback: {box()} val) =>
     // TODO receive an Array of (position, alive/dead) so that we can draw everying in one draw call (black if dead white if alive)
     // this way we don't need 2 arrays and can easily grab the result of our map/reduce methods
 

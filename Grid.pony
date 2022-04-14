@@ -51,18 +51,6 @@ primitive GridOperations
 class GridUpdateToken
     new iso create(auth: AmbientAuth) => None
 
-class GridUpdater
-  let grid: Grid
-
-  var data: Array[Cell tag] iso
-
-  new create(grid': Grid, data': Array[Cell tag] iso) =>
-    grid = grid'
-    data = consume data'
-
-  fun ref apply() =>
-    grid._update_recurively(data = recover data.create() end)
-
 actor Grid
   let env: Env
   let renderer: Renderer
@@ -72,6 +60,7 @@ actor Grid
   var cells: Array[Cell tag] val = recover cells.create() end
   var cells_neighbours: Array[Array[Cell tag] val] val = recover cells_neighbours.create() end
   var spawn_requests: Array[Index] = spawn_requests.create()
+  var dirty_cells: Array[Cell tag] = dirty_cells.create()
 
   new create(env': Env, renderer': Renderer, width': USize, height': USize) =>
     env = env'
@@ -90,14 +79,14 @@ actor Grid
     reset_neighbours()
 
   be update(token: GridUpdateToken iso) =>
-    _update_recurively(recover Array[Cell tag] end)
+    _update_recurively()
 
-  be _update_recurively(input_cells: Array[Cell tag] iso) =>
+  be _update_recurively() =>
     let spawn_promises = Iter[Index](spawn_requests.values())
       .filter_map[Cell tag](GridOperations~index_to_cell(where lookup = cells))
       .map[UpdateStateResultPromise](GridOperations~create_cell_spawn_promise())
 
-    let cell_update_promises = Iter[Cell tag]((consume input_cells).values())
+    let cell_update_promises = Iter[Cell tag](dirty_cells.values())
       .map[UpdateStateResultPromise](GridOperations~create_cell_update_promise())
 
     let all_promises = Iter[UpdateStateResultPromise].chain([spawn_promises; cell_update_promises].values())
@@ -109,23 +98,21 @@ actor Grid
     spawn_requests.clear()
 
   be _receive_cell_update_state_results(results: Array[(UpdateStateResult)] val) =>
-    let dirty_cells = recover iso
-      let alive_cells_neighbours = Iter[UpdateStateResult](results.values())
-        .filter(GridOperations~filter_update_state(where expected = Alive))
-        .map[Index](GridOperations~update_state_result_to_index())
-        .flat_map[Cell tag](GridOperations~index_to_neighbours(where lookup = cells_neighbours))
-        .map[Cell tag](GridOperations~increment_cell_neighbour())
+    let alive_cells_neighbours = Iter[UpdateStateResult](results.values())
+      .filter(GridOperations~filter_update_state(where expected = Alive))
+      .map[Index](GridOperations~update_state_result_to_index())
+      .flat_map[Cell tag](GridOperations~index_to_neighbours(where lookup = cells_neighbours))
+      .map[Cell tag](GridOperations~increment_cell_neighbour())
 
-      let dead_cells_neighbours = Iter[UpdateStateResult](results.values())
-        .filter(GridOperations~filter_update_state(where expected = Dead))
-        .map[Index](GridOperations~update_state_result_to_index())
-        .flat_map[Cell tag](GridOperations~index_to_neighbours(where lookup = cells_neighbours))
-        .map[Cell tag](GridOperations~decrement_cell_neighbour())
+    let dead_cells_neighbours = Iter[UpdateStateResult](results.values())
+      .filter(GridOperations~filter_update_state(where expected = Dead))
+      .map[Index](GridOperations~update_state_result_to_index())
+      .flat_map[Cell tag](GridOperations~index_to_neighbours(where lookup = cells_neighbours))
+      .map[Cell tag](GridOperations~decrement_cell_neighbour())
 
-      Iter[Cell tag].chain([alive_cells_neighbours; dead_cells_neighbours].values())
-        .unique[HashIs[Cell]]()
-        .collect(Array[Cell tag])
-    end
+    Iter[Cell tag].chain([alive_cells_neighbours; dead_cells_neighbours].values())
+      .unique[HashIs[Cell]]()
+      .collect(dirty_cells.>clear())
 
     let new_positions = recover val
       Iter[UpdateStateResult](results.values())
@@ -143,7 +130,7 @@ actor Grid
         .collect(Array[Position])
     end
 
-    renderer.draw(new_positions, old_positions, recover GridUpdater(this, consume dirty_cells) end)
+    renderer.draw(new_positions, old_positions, recover this~_update_recurively() end)
 
   be spawn_at_positions(positions: Array[Position] val) =>
     spawn_requests =
