@@ -17,6 +17,9 @@ primitive GridOperations
     let y = USize.from[PositionType](position._2)
     x + (y * width)
 
+  fun tag index_to_position(index: USize, width: USize): Position =>
+    (PositionType.from[USize](index % width), PositionType.from[USize](index / width))
+
   fun tag index_to_cell(index: Index, lookup: Array[Cell tag] val): (Cell tag | None) =>
     try lookup(index)? else None end
 
@@ -45,9 +48,6 @@ primitive GridOperations
   fun tag update_state_result_to_index(result: UpdateStateResult): Index =>
     result._2
 
-  fun tag update_state_result_to_position(result: UpdateStateResult): Position =>
-    result._3
-
 class GridUpdateToken
     new iso create(auth: AmbientAuth) => None
 
@@ -71,7 +71,7 @@ actor Grid
   var height: USize
   var cells: Array[Cell tag] val = recover cells.create() end
   var cells_neighbours: Array[Array[Cell tag] val] val = recover cells_neighbours.create() end
-  var spawn_requests: Array[Index] iso = recover spawn_requests.create() end
+  var spawn_requests: Array[Index] = spawn_requests.create()
 
   new create(env': Env, renderer': Renderer, width': USize, height': USize) =>
     env = env'
@@ -90,10 +90,10 @@ actor Grid
     reset_neighbours()
 
   be update(token: GridUpdateToken iso) =>
-    _update_recurively()
+    _update_recurively(recover Array[Cell tag] end)
 
-  be _update_recurively(input_cells: Array[Cell tag] iso = recover Array[Cell tag] end) =>
-    let spawn_promises = Iter[Index]((spawn_requests = recover spawn_requests.create() end).values())
+  be _update_recurively(input_cells: Array[Cell tag] iso) =>
+    let spawn_promises = Iter[Index](spawn_requests.values())
       .filter_map[Cell tag](GridOperations~index_to_cell(where lookup = cells))
       .map[UpdateStateResultPromise](GridOperations~create_cell_spawn_promise())
 
@@ -105,6 +105,8 @@ actor Grid
     Promises[(UpdateStateResult)]
       .join(all_promises)
       .next[None](recover this~_receive_cell_update_state_results() end)
+
+    spawn_requests.clear()
 
   be _receive_cell_update_state_results(results: Array[(UpdateStateResult)] val) =>
     let dirty_cells = recover iso
@@ -128,29 +130,27 @@ actor Grid
     let new_positions = recover val
       Iter[UpdateStateResult](results.values())
         .filter(GridOperations~filter_update_state(where expected = Alive))
-        .map[Position](GridOperations~update_state_result_to_position())
+        .map[Index](GridOperations~update_state_result_to_index())
+        .map[Position](GridOperations~index_to_position(where width = width))
         .collect(Array[Position])
     end
 
     let old_positions = recover val
       Iter[UpdateStateResult](results.values())
         .filter(GridOperations~filter_update_state(where expected = Dead))
-        .map[Position](GridOperations~update_state_result_to_position())
+        .map[Index](GridOperations~update_state_result_to_index())
+        .map[Position](GridOperations~index_to_position(where width = width))
         .collect(Array[Position])
     end
 
     renderer.draw(new_positions, old_positions, recover GridUpdater(this, consume dirty_cells) end)
 
   be spawn_at_positions(positions: Array[Position] val) =>
-    spawn_requests = recover iso
+    spawn_requests =
       Iter[Position](positions.values())
         .filter(GridOperations~validate_position(where width = width, height = height))
         .map[Index](GridOperations~position_to_index(where width = width))
         .collect(Array[Index](positions.size()))
-    end
-
-  fun get_position(index: USize): Position =>
-    (PositionType.from[USize](index % width), PositionType.from[USize](index / width))
 
   fun get_index(position: Position): USize =>
     USize.from[F32](position._1) + (USize.from[F32](position._2) * width)
@@ -161,7 +161,7 @@ actor Grid
       let total = width * height
       var out: Array[Cell tag] iso = recover cells.create(total) end
       for index in Range(0, total) do
-        out.push(Cell(env, index, get_position(index)))
+        out.push(Cell(env, index))
       end
       consume out
     end
@@ -172,7 +172,7 @@ actor Grid
       var out: Array[Array[Cell tag] val] iso = recover cells_neighbours.create(cells.size()) end
       for index in Range(0, cells.size()) do
         var neighbours: Array[Cell tag] iso = recover Array[Cell tag](8) end
-        (let x, let y) = get_position(index)
+        (let x, let y) = GridOperations.index_to_position(index, width)
         let w = PositionType.from[USize](width)
         let h = PositionType.from[USize](height)
         if (x > 0) then try neighbours.push(cells(get_index((x - 1, y)))?) end end

@@ -13,14 +13,10 @@ actor Main is GLFWWindowListener
   let window: NullablePointer[GLFWwindow]
   let window_user_object: GLFWWindowUserObject
 
-
-  // TODO this goes in game
-  var mouse_pressed: Bool = false
-
   new create(env': Env) =>
     // TODO this goes in the Window class
-    let window_width: USize = 50
-    let window_height: USize = 50
+    let window_width: USize = 200
+    let window_height: USize = 200
 
     env = env'
 
@@ -80,30 +76,13 @@ actor Main is GLFWWindowListener
     game.resize(USize.from[I32](width), USize.from[I32](height))
 
   fun ref mouse_button_callback(button: I32, action: I32, mods: I32) =>
-    // TODO send info to game and pocess it there
     if (button == GLFWMouseButton1()) then
       if (action == GLFWPress()) then
-        mouse_pressed = true
+        game.left_mouse_button_pressed()
       elseif (action == GLFWRelease()) then
-        mouse_pressed = false
+        game.left_mouse_button_released()
       end
     end
 
-  fun ref cursor_pos_callback(xpos': F64, ypos': F64) =>
-    // TODO send info to game and pocess it there
-    let xpos = F32.from[F64](xpos')
-    let ypos = F32.from[F64](ypos')
-    // TODO use the new method signature
-    /* if (mouse_pressed) then */
-    /*   grid.spawn_at_position((xpos, ypos)) */
-    /*   grid.spawn_at_position((xpos, ypos)) */
-    /*   grid.spawn_at_position((xpos + 1 , ypos)) */
-    /*   grid.spawn_at_position((xpos, ypos + 1)) */
-    /*   grid.spawn_at_position((xpos - 1 , ypos)) */
-    /*   grid.spawn_at_position((xpos, ypos - 1)) */
-    /*   grid.spawn_at_position((xpos + 2 , ypos)) */
-    /*   grid.spawn_at_position((xpos, ypos + 2)) */
-    /*   grid.spawn_at_position((xpos - 2 , ypos)) */
-    /*   grid.spawn_at_position((xpos, ypos - 2)) */
-    /* end */
-
+  fun ref cursor_pos_callback(xpos: F64, ypos: F64) =>
+    game.mouse_moved(xpos, ypos)
