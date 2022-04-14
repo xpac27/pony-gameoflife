@@ -4,18 +4,18 @@ use "pony-gl/Gl"
 actor Renderer is GLDebugMessageListener
   let env: Env
   let window: NullablePointer[GLFWwindow] tag
-  let program: Program
+  let program: Program val
   let total_vertex_array_objects: GLsizei = 2
   let total_vertex_buffer_objects: GLsizei = 2
   let total_render_buffer_objects: GLsizei = 1
   let total_frame_buffer_objects: GLsizei = 1
-  let vertex_array_objects: Array[GLuint] = Array[GLuint].init(GLNone(), USize.from[GLsizei](total_vertex_array_objects))
-  let vertex_buffer_objects: Array[GLuint] = Array[GLuint].init(GLNone(), USize.from[GLsizei](total_vertex_buffer_objects))
-  let render_buffer_objects: Array[GLuint] = Array[GLuint].init(GLNone(), USize.from[GLsizei](total_render_buffer_objects))
-  let frame_buffer_objects: Array[GLuint] = Array[GLuint].init(GLNone(), USize.from[GLsizei](total_frame_buffer_objects))
-  let color_white: Array[F32] = [1 ; 1 ; 1]
-  let color_black: Array[F32] = [0 ; 0 ; 0]
-  let color_red: Array[F32] = [1 ; 0 ; 0]
+  let vertex_array_objects: Array[GLuint] val = recover Array[GLuint].init(GLNone(), USize.from[GLsizei](total_vertex_array_objects)) end
+  let vertex_buffer_objects: Array[GLuint] val = recover Array[GLuint].init(GLNone(), USize.from[GLsizei](total_vertex_buffer_objects)) end
+  let render_buffer_objects: Array[GLuint] val = recover Array[GLuint].init(GLNone(), USize.from[GLsizei](total_render_buffer_objects)) end
+  let frame_buffer_objects: Array[GLuint] val = recover Array[GLuint].init(GLNone(), USize.from[GLsizei](total_frame_buffer_objects)) end
+  let color_white: Array[F32] val = recover [1 ; 1 ; 1] end
+  let color_black: Array[F32] val = recover [0 ; 0 ; 0] end 
+  let color_red: Array[F32] val = recover [1 ; 0 ; 0] end
 
   var width: GLsizei
   var height: GLsizei
@@ -34,10 +34,10 @@ actor Renderer is GLDebugMessageListener
 
     env.out.print("GL version: " + GlHelper.glGetString(GLVersion()))
 
-    program = Program(env, [
+    program = recover Program(env, [
       Shader(env, VertexShader, "shaders/default.vert")
       Shader(env, FragmentShader, "shaders/default.frag")
-    ])
+    ]) end
 
     // TODO create wrapper classes
     Gl.glGenVertexArrays(total_vertex_array_objects, vertex_array_objects.cpointer())
@@ -60,42 +60,47 @@ actor Renderer is GLDebugMessageListener
     Gl.glDeleteBuffers(1, vertex_buffer_objects.cpointer())
     Gl.glDeleteVertexArrays(1, vertex_array_objects.cpointer())
 
-  // TODO here we could use the accessor pattern to not have to create new position arrays all the time (Renderer would access Grid's positions members and do its stuff with it)
-  be draw(new_positions: Array[(F32, F32)] val, old_positions: Array[(F32, F32)] val, callback: {box()} val) =>
+  be draw(accessor: GridPositionAccessor tag, callback: {box()} val) =>
     // TODO receive an Array of (position, alive/dead) so that we can draw everying in one draw call (black if dead white if alive)
     // this way we don't need 2 arrays and can easily grab the result of our map/reduce methods
 
-    Glfw3.glfwMakeContextCurrent(window)
-    Glfw3.glfwSwapInterval(1)
-    Glfw3.glfwSwapBuffers(window)
+    accessor.access({(accessor: GridPositionAccessor ref) =>
+      let new_positions = accessor.get_new_positions()
+      let old_positions = accessor.get_old_positions()
 
-    Glfw3.glfwPollEvents()
+      Glfw3.glfwMakeContextCurrent(window)
+      Glfw3.glfwSwapInterval(1)
+      Glfw3.glfwSwapBuffers(window)
 
-    Gl.glUseProgram(program.handle)
-    Gl.glBindVertexArray(try vertex_array_objects(0)? else GLNone() end)
+      Glfw3.glfwPollEvents()
 
-    Gl.glBindFramebuffer(GLDrawFramebuffer(), try frame_buffer_objects(0)? else GLNone() end)
+      Gl.glUseProgram(program.handle)
+      Gl.glBindVertexArray(try vertex_array_objects(0)? else GLNone() end)
 
-    Gl.glUniform3fv(Gl.glGetUniformLocation(program.handle, "color".cpointer()), 1, color_white.cpointer())
-    Gl.glBufferData[(F32, F32)](GLArrayBuffer(), GLsizeiptr.from[USize]((32 / 8) * 2 * new_positions.size()), new_positions.cpointer(), GLDynamicDraw())
-    Gl.glDrawArrays(GLPoints(), 0, GLsizei.from[USize](new_positions.size() * 2))
+      Gl.glBindFramebuffer(GLDrawFramebuffer(), try frame_buffer_objects(0)? else GLNone() end)
 
-    Gl.glUniform3fv(Gl.glGetUniformLocation(program.handle, "color".cpointer()), 1, color_black.cpointer())
-    Gl.glBufferData[(F32, F32)](GLArrayBuffer(), GLsizeiptr.from[USize]((32 / 8) * 2 * old_positions.size()), old_positions.cpointer(), GLDynamicDraw())
-    Gl.glDrawArrays(GLPoints(), 0, GLsizei.from[USize](old_positions.size() * 2))
+      Gl.glUniform3fv(Gl.glGetUniformLocation(program.handle, "color".cpointer()), 1, color_white.cpointer())
+      Gl.glBufferData[(F32, F32)](GLArrayBuffer(), GLsizeiptr.from[USize]((32 / 8) * 2 * new_positions.size()), new_positions.cpointer(), GLDynamicDraw())
+      Gl.glDrawArrays(GLPoints(), 0, GLsizei.from[USize](new_positions.size() * 2))
 
-    Gl.glUseProgram(GLNone())
-    Gl.glBindVertexArray(GLNone())
+      Gl.glUniform3fv(Gl.glGetUniformLocation(program.handle, "color".cpointer()), 1, color_black.cpointer())
+      Gl.glBufferData[(F32, F32)](GLArrayBuffer(), GLsizeiptr.from[USize]((32 / 8) * 2 * old_positions.size()), old_positions.cpointer(), GLDynamicDraw())
+      Gl.glDrawArrays(GLPoints(), 0, GLsizei.from[USize](old_positions.size() * 2))
 
-    Gl.glBindFramebuffer(GLReadFramebuffer(), try frame_buffer_objects(0)? else GLNone() end)
-    Gl.glBindFramebuffer(GLDrawFramebuffer(), 0)
-    Gl.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GLColorBufferBit(), GLNearest())
-    Gl.glBindFramebuffer(GLReadFramebuffer(), GLNone())
-    Gl.glBindFramebuffer(GLDrawFramebuffer(), GLNone())
+      Gl.glUseProgram(GLNone())
+      Gl.glBindVertexArray(GLNone())
 
-    if (Glfw3.glfwWindowShouldClose(window) == GLFWFalse()) then
-      callback()
-    end
+      Gl.glBindFramebuffer(GLReadFramebuffer(), try frame_buffer_objects(0)? else GLNone() end)
+      Gl.glBindFramebuffer(GLDrawFramebuffer(), 0)
+      Gl.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GLColorBufferBit(), GLNearest())
+      Gl.glBindFramebuffer(GLReadFramebuffer(), GLNone())
+      Gl.glBindFramebuffer(GLDrawFramebuffer(), GLNone())
+
+      if (Glfw3.glfwWindowShouldClose(window) == GLFWFalse()) then
+        callback()
+      end
+    } val)
+
 
   be resize(width': USize, height': USize) =>
     env.out.print("resize")
