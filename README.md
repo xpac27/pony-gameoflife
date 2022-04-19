@@ -24,5 +24,5 @@ and click to spawn more cells.
 
 ## Settings
 
-- Lower `swap_interval` in `Renderer.pony` to speed up the simulation, 1 means synced with monitor's refresh rate
-- Change `scale` in `Game.pony` to change the simulation's resolution, higher means smaller (and thus more) cells
+- Lower `swap_interval` in `Renderer.pony` to speed up the simulation, 1 means in sync with monitor
+- Change `scale` in `Game.pony` to change the simulation's resolution, higher means more cells
