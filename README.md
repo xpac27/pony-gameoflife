@@ -2,7 +2,7 @@
 
 This is a learning exercice writing Conway's Game of Life in Pony.
 
-![Screenshot](screenshot.png)
+![Screenshot](assets/screenshot.png)
 
 ## Usage
 
