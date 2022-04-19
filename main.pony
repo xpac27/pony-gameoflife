@@ -15,8 +15,8 @@ actor Main is GLFWWindowListener
 
   new create(env': Env) =>
     // TODO this goes in the Window class
-    let window_width: USize = 1024
-    let window_height: USize = 768
+    let window_width: USize = 830
+    let window_height: USize = 360
 
     env = env'
 
