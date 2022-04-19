@@ -4,17 +4,24 @@ use "collections"
 use "itertools"
 use "time"
 
+primitive GameOperations
+  fun tag scale_usize(value: USize, factor: F32): USize =>
+    USize.from[F32]((F32.from[USize](value) * factor))
+
 // TODO make a game package
 class Game
   let env: Env
   let renderer: Renderer
   let grid: Grid
+  let scale: F32 = 0.1
 
-  var is_left_mouse_button_pressed: Bool = false
+  var mouse_position: Position = (0, 0)
 
-  new create(env': Env, width: USize, height: USize, window: NullablePointer[GLFWwindow], token: GridUpdateToken iso) =>
+  new create(env': Env, width': USize, height': USize, window: NullablePointer[GLFWwindow], token: GridUpdateToken iso) =>
+    let width = GameOperations.scale_usize(width', scale)
+    let height = GameOperations.scale_usize(height', scale)
     env = env'
-    renderer = Renderer(env, window, width, height)
+    renderer = Renderer(env, window, width, height, 1 / scale)
     grid = Grid(env, renderer, width, height)
     grid.>spawn_at_positions([
       (10, 10)
@@ -23,22 +30,32 @@ class Game
     ])
     .update(consume token)
 
-  fun resize(width: USize, height: USize) =>
+  fun resize(width': USize, height': USize) =>
+    let width = GameOperations.scale_usize(width', scale)
+    let height = GameOperations.scale_usize(height', scale)
     grid.resize(width, height)
     renderer.resize(width, height)
 
-  fun ref left_mouse_button_pressed() =>
-    is_left_mouse_button_pressed = true
-
   fun ref left_mouse_button_released() =>
-    is_left_mouse_button_pressed = false
+    grid.spawn_at_positions(recover val
+      let rand: Rand = Rand.from_u64(Time.millis())
+      let amount: USize = 10
+      let spread: F64 = 8
+      Iter[USize](Range(0, amount)).map_stateful[Position]({
+        (i: USize) =>
+          (
+            mouse_position._1 + F32.from[F64]((rand.real() * spread) - (spread / 2)),
+            mouse_position._2 + F32.from[F64]((rand.real() * spread) - (spread / 2))
+          )
+      })
+      .collect(Array[Position](amount))
+    end)
+    // Alternative to spawn only 1 cell at a time
+    // grid.spawn_at_positions([mouse_position])
 
   fun ref mouse_moved(x: F64, y: F64) =>
-    if is_left_mouse_button_pressed then
-      grid.>spawn_at_positions(recover val
-        let rand: Rand = Rand.from_u64(Time.millis())
-        Iter[USize](Range(0, 10)).map_stateful[Position]({(i: USize) => (F32.from[F64](x + ((rand.real() * 10) - 5)), F32.from[F64](y + ((rand.real() * 10) - 5))) })
-        .collect(Array[Position](10))
-      end)
-    end
+    mouse_position = (
+          F32.from[F64](x * F64.from[F32](scale)),
+          F32.from[F64](y * F64.from[F32](scale))
+    )
 

@@ -15,8 +15,8 @@ actor Main is GLFWWindowListener
 
   new create(env': Env) =>
     // TODO this goes in the Window class
-    let window_width: USize = 200
-    let window_height: USize = 200
+    let window_width: USize = 1024
+    let window_height: USize = 768
 
     env = env'
 
@@ -44,7 +44,7 @@ actor Main is GLFWWindowListener
       end
 
       // TODO set in the middle of the monitor
-      Glfw3.glfwSetWindowPos(window, 400, 400)
+      Glfw3.glfwSetWindowPos(window, 200, 200)
     else
       // TODO better handle errors, the next steps wont work if we reach this scope
       env.out.print(Glfw3Helper.get_error_description())
@@ -77,9 +77,7 @@ actor Main is GLFWWindowListener
 
   fun ref mouse_button_callback(button: I32, action: I32, mods: I32) =>
     if (button == GLFWMouseButton1()) then
-      if (action == GLFWPress()) then
-        game.left_mouse_button_pressed()
-      elseif (action == GLFWRelease()) then
+      if (action == GLFWRelease()) then
         game.left_mouse_button_released()
       end
     end

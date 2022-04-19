@@ -5,6 +5,8 @@ actor Renderer is GLDebugMessageListener
   let env: Env
   let window: NullablePointer[GLFWwindow] tag
   let program: Program val
+  let zoom: GLsizei
+  let swap_interval: I32 = 5
   let total_vertex_array_objects: GLsizei = 2
   let total_vertex_buffer_objects: GLsizei = 2
   let total_render_buffer_objects: GLsizei = 1
@@ -20,11 +22,12 @@ actor Renderer is GLDebugMessageListener
   var width: GLsizei
   var height: GLsizei
 
-  new create(env': Env, window': NullablePointer[GLFWwindow] tag, width': USize, height': USize) =>
+  new create(env': Env, window': NullablePointer[GLFWwindow] tag, width': USize, height': USize, zoom': F32) =>
     env = env'
     window = window'
     width = GLsizei.from[USize](width')
     height = GLsizei.from[USize](height')
+    zoom = GLsizei.from[F32](zoom')
 
     Glfw3.glfwMakeContextCurrent(window)
 
@@ -69,7 +72,7 @@ actor Renderer is GLDebugMessageListener
       let old_positions = accessor.get_old_positions()
 
       Glfw3.glfwMakeContextCurrent(window)
-      Glfw3.glfwSwapInterval(1)
+      Glfw3.glfwSwapInterval(swap_interval)
       Glfw3.glfwSwapBuffers(window)
 
       Glfw3.glfwPollEvents()
@@ -92,7 +95,7 @@ actor Renderer is GLDebugMessageListener
 
       Gl.glBindFramebuffer(GLReadFramebuffer(), try frame_buffer_objects(0)? else GLNone() end)
       Gl.glBindFramebuffer(GLDrawFramebuffer(), 0)
-      Gl.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GLColorBufferBit(), GLNearest())
+      Gl.glBlitFramebuffer(0, 0, width, height, 0, 0, width * zoom, height * zoom, GLColorBufferBit(), GLNearest())
       Gl.glBindFramebuffer(GLReadFramebuffer(), GLNone())
       Gl.glBindFramebuffer(GLDrawFramebuffer(), GLNone())
 
