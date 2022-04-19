@@ -21,3 +21,8 @@ then run the executable
     ./pony-gameoflife
 
 and click to spawn more cells.
+
+## Settings
+
+- Increase `swap_interval` in `Renderer.pony` to slow down the simulation
+- Change `scale` in `Game.pony` to change the simulation's resolution, higher means smaller (and thus more) cells
