@@ -37,25 +37,49 @@ primitive GridOperations
   fun tag decrement_cell_neighbour(cell: Cell tag): Cell tag =>
     cell.>decrement_alive_neighbour_count()
 
-  // TODO use a map of prebuilt promise instead of creating new ones
-  fun tag create_cell_update_promise(cell: Cell tag): UpdateStateResultPromise =>
-    let promise = UpdateStateResultPromise
-    cell.update_state(promise)
-    promise
-
-  fun tag create_cell_spawn_promise(cell: Cell tag): UpdateStateResultPromise =>
-    let promise = UpdateStateResultPromise
-    cell.spawn(promise)
-    promise
-
-  fun tag filter_update_state(result: UpdateStateResult, expected: State): Bool =>
+  fun tag filter_update_state(result: CellUpdateResult, expected: State): Bool =>
     result._1 is expected
 
-  fun tag update_state_result_to_index(result: UpdateStateResult): Index =>
+  fun tag update_state_result_to_index(result: CellUpdateResult): Index =>
     result._2
 
 class GridUpdateToken
     new iso create(auth: AmbientAuth) => None
+
+primitive UpdateCells
+  new create(env: Env, spawned_cells: Array[Cell tag] ref, dirty_cells: Array[Cell tag] ref, grid: Grid tag) =>
+    if (spawned_cells.size() == 0) and (dirty_cells.size() == 0) then
+      grid._join_completed(recover Array[CellUpdateResult] end)
+    else
+      let results = CellUpdateResults(grid, (spawned_cells.size() + dirty_cells.size()))
+      for cell in spawned_cells.values() do
+        cell.spawn(results)
+      end
+      for cell in dirty_cells.values() do
+        cell.update(results)
+      end
+    end
+
+actor CellUpdateResults
+  embed _results: Array[CellUpdateResult]
+  let _space: USize
+  let _grid: Grid tag
+
+  new create(grid: Grid tag, space: USize) =>
+    _results = Array[CellUpdateResult](space)
+    _space = space
+    _grid = grid
+
+  be apply(result': CellUpdateResult) =>
+    _results.push(result')
+    if _results.size() == _space then
+      let len = _results.size()
+      let results = recover Array[CellUpdateResult](len) end
+      for result in _results.values() do
+        results.push(result)
+      end
+      _grid._join_completed(consume results)
+    end
 
 actor Grid
   let _env: Env
@@ -65,7 +89,7 @@ actor Grid
   var _height: USize
   var _cells: Array[Cell tag] val = recover _cells.create() end
   var _cells_neighbours: Array[Array[Cell tag] val] val = recover _cells_neighbours.create() end
-  var _spawn_requests: Array[Index] = _spawn_requests.create()
+  var _spawn_requests: Array[Cell tag] = _spawn_requests.create()
   var _dirty_cells: Array[Cell tag] = _dirty_cells.create()
   var _old_positions: Array[Position] = _old_positions.create()
   var _new_positions: Array[Position] = _new_positions.create()
@@ -90,29 +114,17 @@ actor Grid
     _update_recurively()
 
   be _update_recurively() =>
-    let spawn_promises = Iter[Index](_spawn_requests.values())
-      .filter_map[Cell tag](GridOperations~index_to_cell(where lookup = _cells))
-      .map[UpdateStateResultPromise](GridOperations~create_cell_spawn_promise())
-
-    let cell_update_promises = Iter[Cell tag](_dirty_cells.values())
-      .map[UpdateStateResultPromise](GridOperations~create_cell_update_promise())
-
-    let all_promises = Iter[UpdateStateResultPromise].chain([spawn_promises; cell_update_promises].values())
-
-    Promises[(UpdateStateResult)]
-      .join(all_promises)
-      .next[None](recover this~_receive_cell_update_state_results() end)
-
+    UpdateCells(_env, _spawn_requests, _dirty_cells, this)
     _spawn_requests.clear()
 
-  be _receive_cell_update_state_results(results: Array[(UpdateStateResult)] val) =>
-    let alive_cells_neighbours = Iter[UpdateStateResult](results.values())
+  be _join_completed(results: Array[CellUpdateResult] val) =>
+    let alive_cells_neighbours = Iter[CellUpdateResult](results.values())
       .filter(GridOperations~filter_update_state(where expected = Alive))
       .map[Index](GridOperations~update_state_result_to_index())
       .flat_map[Cell tag](GridOperations~index_to_neighbours(where lookup = _cells_neighbours))
       .map[Cell tag](GridOperations~increment_cell_neighbour())
 
-    let dead_cells_neighbours = Iter[UpdateStateResult](results.values())
+    let dead_cells_neighbours = Iter[CellUpdateResult](results.values())
       .filter(GridOperations~filter_update_state(where expected = Dead))
       .map[Index](GridOperations~update_state_result_to_index())
       .flat_map[Cell tag](GridOperations~index_to_neighbours(where lookup = _cells_neighbours))
@@ -122,13 +134,13 @@ actor Grid
       .unique[HashIs[Cell]]()
       .collect(_dirty_cells.>clear())
 
-    Iter[UpdateStateResult](results.values())
+    Iter[CellUpdateResult](results.values())
       .filter(GridOperations~filter_update_state(where expected = Alive))
       .map[Index](GridOperations~update_state_result_to_index())
       .map[Position](GridOperations~index_to_position(where width = _width))
       .collect(_new_positions.>clear())
 
-    Iter[UpdateStateResult](results.values())
+    Iter[CellUpdateResult](results.values())
       .filter(GridOperations~filter_update_state(where expected = Dead))
       .map[Index](GridOperations~update_state_result_to_index())
       .map[Position](GridOperations~index_to_position(where width = _width))
@@ -140,6 +152,7 @@ actor Grid
     Iter[Position](positions.values())
       .filter(GridOperations~validate_position(where width = _width, height = _height))
       .map[Index](GridOperations~position_to_index(where width = _width))
+      .filter_map[Cell tag](GridOperations~index_to_cell(where lookup = _cells))
       .collect(_spawn_requests.>clear())
 
   be access(fn: {(GridPositionAccessor ref)} val) =>

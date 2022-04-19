@@ -4,8 +4,7 @@ primitive Dead
 primitive Alive
 primitive Unchanged
 type State is (Dead | Alive | Unchanged)
-type UpdateStateResult is (State, Index )
-type UpdateStateResultPromise is Promise[(UpdateStateResult)]
+type CellUpdateResult is (State, Index )
 
 actor Cell
   let env: Env
@@ -24,18 +23,18 @@ actor Cell
   be decrement_alive_neighbour_count() =>
     alive_neighbour = alive_neighbour - 1
 
-  be spawn(p: UpdateStateResultPromise) =>
+  be spawn(result: CellUpdateResults) =>
     alive = true
-    p((Alive, index))
+    result((Alive, index))
 
-  be update_state(p: UpdateStateResultPromise) =>
+  be update(result: CellUpdateResults) =>
     if (alive == true) and ((alive_neighbour < 2) or (alive_neighbour > 3)) then
       alive = false
-      p((Dead, index))
+      result((Dead, index))
     elseif (alive == false) and (alive_neighbour == 3) then
       alive = true
-      p((Alive, index))
+      result((Alive, index))
     else
-      p((Unchanged, index))
+      result((Unchanged, index))
     end
 
