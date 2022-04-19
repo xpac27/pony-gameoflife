@@ -5,7 +5,7 @@ actor Renderer is GLDebugMessageListener
   let env: Env
   let window: NullablePointer[GLFWwindow] tag
   let program: Program val
-  let zoom: GLsizei
+  let zoom: F32
   let swap_interval: I32 = 5
   let total_vertex_array_objects: GLsizei = 2
   let total_vertex_buffer_objects: GLsizei = 2
@@ -27,7 +27,7 @@ actor Renderer is GLDebugMessageListener
     window = window'
     width = GLsizei.from[USize](width')
     height = GLsizei.from[USize](height')
-    zoom = GLsizei.from[F32](zoom')
+    zoom = zoom'
 
     Glfw3.glfwMakeContextCurrent(window)
 
@@ -95,7 +95,7 @@ actor Renderer is GLDebugMessageListener
 
       Gl.glBindFramebuffer(GLReadFramebuffer(), try frame_buffer_objects(0)? else GLNone() end)
       Gl.glBindFramebuffer(GLDrawFramebuffer(), 0)
-      Gl.glBlitFramebuffer(0, 0, width, height, 0, 0, width * zoom, height * zoom, GLColorBufferBit(), GLNearest())
+      Gl.glBlitFramebuffer(0, 0, width, height, 0, 0, GLsizei.from[F32](F32.from[GLsizei](width) * zoom), GLsizei.from[F32](F32.from[GLsizei](height) * zoom), GLColorBufferBit(), GLNearest())
       Gl.glBindFramebuffer(GLReadFramebuffer(), GLNone())
       Gl.glBindFramebuffer(GLDrawFramebuffer(), GLNone())
 
