@@ -1,4 +1,4 @@
-use "pony-glfw3/Glfw3"
+use "../pony-glfw3/Glfw3"
 use "random"
 use "collections"
 use "itertools"

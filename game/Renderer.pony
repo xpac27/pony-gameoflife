@@ -1,5 +1,5 @@
-use "pony-glfw3/Glfw3"
-use "pony-gl/Gl"
+use "../pony-glfw3/Glfw3"
+use "../pony-gl/Gl"
 
 actor Renderer is GLDebugMessageListener
   let env: Env
@@ -16,7 +16,7 @@ actor Renderer is GLDebugMessageListener
   let render_buffer_objects: Array[GLuint] val = recover Array[GLuint].init(GLNone(), USize.from[GLsizei](total_render_buffer_objects)) end
   let frame_buffer_objects: Array[GLuint] val = recover Array[GLuint].init(GLNone(), USize.from[GLsizei](total_frame_buffer_objects)) end
   let color_white: Array[F32] val = recover [1 ; 1 ; 1] end
-  let color_black: Array[F32] val = recover [0 ; 0 ; 0] end 
+  let color_black: Array[F32] val = recover [0 ; 0 ; 0] end
   let color_red: Array[F32] val = recover [1 ; 0 ; 0] end
 
   var width: GLsizei

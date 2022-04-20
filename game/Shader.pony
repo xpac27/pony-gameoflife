@@ -1,4 +1,4 @@
-use "pony-gl/Gl"
+use "../pony-gl/Gl"
 use "files"
 
 primitive VertexShader

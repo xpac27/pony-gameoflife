@@ -1,7 +1,7 @@
-use "lib:opengl32" if windows
-use "pony-glfw3/Glfw3"
 use "pony-gl/Gl"
-use "lib:GLEW" if linux
+use "pony-glfw3/Glfw3" // TODO move dependencies down inside game package by implementing a Window class in Game package
+use "lib:GLEW" if linux // TODO same as above (that should be done by the renderer class' constructor)
+use "game"
 
 // TODO put in its own package
 use @glewInit[GLenum]()
